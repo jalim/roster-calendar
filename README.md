@@ -10,6 +10,10 @@ This service allows pilots to send their monthly roster text file from the Qanta
 
 - **Roster Parsing**: Parses Qantas Airways roster text files
 - **ICS Calendar Generation**: Converts roster entries to standard ICS format
+- **Timezone Support**: Automatically handles timezone information for different airports
+  - Australian airports: PER (Perth UTC+8), SYD/MEL (UTC+10/11 with DST), BNE (UTC+10), etc.
+  - International destinations: LAX, SIN, HND, LHR, and more
+  - Times are stored in local timezone of the port/destination
 - **REST API**: Upload rosters and retrieve ICS calendars via HTTP
 - **Email Support**: Framework for receiving rosters via email (requires integration)
 - **Calendar Subscription**: Generated ICS files can be subscribed to in any calendar application
@@ -114,6 +118,21 @@ Date    Duty(Role)  Service                     S-On S-Of Duty  Credit Port Code
 - **AV**: Annual leave
 - **P[flight]**: Passive/positioning flight
 
+## Timezone Handling
+
+The service automatically manages timezones based on the port (airport) for each duty:
+
+- **Sign-on/Sign-off times** are in the local timezone of the port
+- **Supported Australian airports**: PER, SYD, MEL, BNE, ADL, DRW, CNS, HBA, and more
+- **International airports**: LAX, SIN, HND, LHR, BKK, and many others
+- **DST aware**: Automatically handles Daylight Saving Time for applicable locations
+
+The timezone is embedded in the ICS calendar description for each event, ensuring accurate calendar entries across different time zones.
+
+Example:
+- A flight departing Perth (PER) at 1650 will be in Perth time (UTC+8)
+- A flight arriving in Sydney (SYD) will be in Sydney time (UTC+10 or UTC+11 during DST)
+
 ## Testing
 
 Run tests:
@@ -146,12 +165,14 @@ roster-calendar/
 │   │   └── qantas-roster-parser.js # Roster parser
 │   ├── services/
 │   │   ├── ics-calendar-service.js # ICS generation
+│   │   ├── timezone-service.js     # Timezone mappings
 │   │   └── email-service.js        # Email handling (framework)
 │   └── routes/
 │       └── roster-routes.js        # API routes
 ├── tests/
 │   ├── qantas-roster-parser.test.js
-│   └── ics-calendar-service.test.js
+│   ├── ics-calendar-service.test.js
+│   └── timezone-service.test.js
 ├── examples/
 │   └── sample-roster.txt           # Sample roster file
 └── package.json

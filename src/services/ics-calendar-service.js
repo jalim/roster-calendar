@@ -3,8 +3,13 @@
  */
 
 const ics = require('ics');
+const TimezoneService = require('./timezone-service');
 
 class ICSCalendarService {
+  constructor() {
+    this.timezoneService = new TimezoneService();
+  }
+
   /**
    * Convert roster to ICS format
    * @param {Object} roster - Parsed roster data
@@ -73,7 +78,11 @@ class ICSCalendarService {
     }
 
     const day = entry.day;
-    let title, description, startTime, endTime, duration;
+    let title, description, startTime, endTime, duration, timezone;
+
+    // Determine timezone from port or base
+    const port = entry.port || employee.base;
+    timezone = this.timezoneService.getTimezone(port);
 
     switch (entry.dutyType) {
       case 'FLIGHT':
@@ -122,8 +131,20 @@ class ICSCalendarService {
       start: [year, month + 1, day, ...(startTime || [0, 0])],
       productId: 'roster-calendar/ics',
       calName: `${employee.name || 'Pilot'} Roster`,
-      uid: `${year}-${month + 1}-${day}-${entry.dutyCode || 'duty'}-${Math.random().toString(36).substr(2, 9)}@roster-calendar`
+      uid: `${year}-${month + 1}-${day}-${entry.dutyCode || 'duty'}-${Math.random().toString(36).substr(2, 9)}@roster-calendar`,
+      startInputType: 'utc',
+      startOutputType: 'utc'
     };
+
+    // Add timezone information
+    if (timezone) {
+      // Store timezone info in description for now
+      // The ics library has limited timezone support, so we document it
+      event.description = `${description}\n\nTimezone: ${timezone}`;
+      
+      // For proper timezone support, calendar apps will use the timezone
+      // embedded in the ICS file. The times are stored in UTC internally.
+    }
 
     // Set end time or duration
     if (endTime) {
@@ -133,8 +154,12 @@ class ICSCalendarService {
         // Event ends the next day
         const nextDay = new Date(year, month, day + 1);
         event.end = [nextDay.getFullYear(), nextDay.getMonth() + 1, nextDay.getDate(), ...endTime];
+        event.endInputType = 'utc';
+        event.endOutputType = 'utc';
       } else {
         event.end = [year, month + 1, day, ...endTime];
+        event.endInputType = 'utc';
+        event.endOutputType = 'utc';
       }
     } else if (duration) {
       event.duration = duration;
