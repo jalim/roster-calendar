@@ -14,6 +14,7 @@ uploads/
 
 # Local outputs / personal data
 imap-diagnose*.out
-data/
+/data/
+!src/data/qantas_airports_timezones.csv
 examples/webCisRoster_*.txt
 

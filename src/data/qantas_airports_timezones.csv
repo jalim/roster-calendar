@@ -1,0 +1,124 @@
+IATA Code,Airport Name,State/Country,Time Zone (IANA),UTC Offset,Category
+JNB,Johannesburg,South Africa,Africa/Johannesburg,UTC+02,International
+BKK,Bangkok,Thailand,Asia/Bangkok,UTC+07,International
+BLR,Bengaluru,India,Asia/Kolkata,UTC+05:30,International
+DEL,Delhi,India,Asia/Kolkata,UTC+05:30,International
+HKG,Hong Kong,Hong Kong SAR,Asia/Hong_Kong,UTC+08,International
+HND,Tokyo Haneda,Japan,Asia/Tokyo,UTC+09,International
+KIX,Osaka,Japan,Asia/Tokyo,UTC+09,International
+CTS,Sapporo,Japan,Asia/Tokyo,UTC+09,International
+MNL,Manila,Philippines,Asia/Manila,UTC+08,International
+SGN,Ho Chi Minh City,Vietnam,Asia/Ho_Chi_Minh,UTC+07,International
+SIN,Singapore,Singapore,Asia/Singapore,UTC+08,International
+CDG,Paris,France,Europe/Paris,UTC+01,International
+FCO,Rome,Italy,Europe/Rome,UTC+01,International
+LHR,London Heathrow,United Kingdom,Europe/London,UTC+00,International
+AKL,Auckland,New Zealand,Pacific/Auckland,UTC+13,International
+CHC,Christchurch,New Zealand,Pacific/Auckland,UTC+13,International
+DUD,Dunedin,New Zealand,Pacific/Auckland,UTC+13,International
+WLG,Wellington,New Zealand,Pacific/Auckland,UTC+13,International
+ZQN,Queenstown,New Zealand,Pacific/Auckland,UTC+13,International
+DIL,Dili,Timor-Leste,Asia/Dili,UTC+09,International
+NAN,Nadi,Fiji,Pacific/Fiji,UTC+12,International
+NOU,Noumea,New Caledonia,Pacific/Noumea,UTC+11,International
+PPT,Papeete,French Polynesia,Pacific/Tahiti,UTC-10,International
+ROR,Koror,Palau,Pacific/Palau,UTC+09,International
+TBU,Nuku'alofa,Tonga,Pacific/Tongatapu,UTC+13,International
+VLI,Port Vila,Vanuatu,Pacific/Efate,UTC+11,International
+DFW,Dallas Fort Worth,United States,America/Chicago,UTC-06,International
+HNL,Honolulu,United States,Pacific/Honolulu,UTC-10,International
+JFK,New York JFK,United States,America/New_York,UTC-05,International
+LAX,Los Angeles,United States,America/Los_Angeles,UTC-08,International
+SFO,San Francisco,United States,America/Los_Angeles,UTC-08,International
+YVR,Vancouver,Canada,America/Vancouver,UTC-08,International
+SCL,Santiago,Chile,America/Santiago,UTC-03,International
+ADL,Adelaide,South Australia,Australia/Adelaide,UTC+10:30,Domestic
+BNE,Brisbane,Queensland,Australia/Brisbane,UTC+10,Domestic
+CBR,Canberra,ACT,Australia/Sydney,UTC+11,Domestic
+DRW,Darwin,Northern Territory,Australia/Darwin,UTC+09:30,Domestic
+HBA,Hobart,Tasmania,Australia/Hobart,UTC+11,Domestic
+LST,Launceston,Tasmania,Australia/Hobart,UTC+11,Domestic
+MEL,Melbourne,Victoria,Australia/Melbourne,UTC+11,Domestic
+OOL,Gold Coast,Queensland,Australia/Brisbane,UTC+10,Domestic
+PER,Perth,Western Australia,Australia/Perth,UTC+08,Domestic
+SYD,Sydney,New South Wales,Australia/Sydney,UTC+11,Domestic
+ABX,Albury,New South Wales,Australia/Sydney,UTC+11,Domestic
+ARM,Armidale,New South Wales,Australia/Sydney,UTC+11,Domestic
+BHQ,Broken Hill,New South Wales,Australia/Broken_Hill,UTC+10:30,Domestic
+BNK,Ballina,New South Wales,Australia/Sydney,UTC+11,Domestic
+CFS,Coffs Harbour,New South Wales,Australia/Sydney,UTC+11,Domestic
+DBO,Dubbo,New South Wales,Australia/Sydney,UTC+11,Domestic
+MIM,Merimbula,New South Wales,Australia/Sydney,UTC+11,Domestic
+MYA,Moruya,New South Wales,Australia/Sydney,UTC+11,Domestic
+NTL,Newcastle,New South Wales,Australia/Sydney,UTC+11,Domestic
+OAG,Orange,New South Wales,Australia/Sydney,UTC+11,Domestic
+PQQ,Port Macquarie,New South Wales,Australia/Sydney,UTC+11,Domestic
+TMW,Tamworth,New South Wales,Australia/Sydney,UTC+11,Domestic
+WGA,Wagga Wagga,New South Wales,Australia/Sydney,UTC+11,Domestic
+BDB,Bundaberg,Queensland,Australia/Brisbane,UTC+10,Domestic
+BQL,Boulia,Queensland,Australia/Brisbane,UTC+10,Domestic
+BVI,Birdsville,Queensland,Australia/Brisbane,UTC+10,Domestic
+CNJ,Cloncurry,Queensland,Australia/Brisbane,UTC+10,Domestic
+CNS,Cairns,Queensland,Australia/Brisbane,UTC+10,Domestic
+EDR,Pormpuraaw,Queensland,Australia/Brisbane,UTC+10,Domestic
+EMD,Emerald,Queensland,Australia/Brisbane,UTC+10,Domestic
+GLT,Gladstone,Queensland,Australia/Brisbane,UTC+10,Domestic
+HTI,Hamilton Island,Queensland,Australia/Brisbane,UTC+10,Domestic
+HVB,Hervey Bay,Queensland,Australia/Brisbane,UTC+10,Domestic
+ISA,Mount Isa,Queensland,Australia/Brisbane,UTC+10,Domestic
+LRE,Longreach,Queensland,Australia/Brisbane,UTC+10,Domestic
+MKY,Mackay,Queensland,Australia/Brisbane,UTC+10,Domestic
+PPP,Proserpine,Queensland,Australia/Brisbane,UTC+10,Domestic
+ROK,Rockhampton,Queensland,Australia/Brisbane,UTC+10,Domestic
+TSV,Townsville,Queensland,Australia/Brisbane,UTC+10,Domestic
+WTB,Brisbane West Wellcamp,Queensland,Australia/Brisbane,UTC+10,Domestic
+MQL,Mildura,Victoria,Australia/Melbourne,UTC+11,Domestic
+KGC,Kingscote (Kangaroo Island),South Australia,Australia/Adelaide,UTC+10:30,Domestic
+PPI,Port Pirie,South Australia,Australia/Adelaide,UTC+10:30,Domestic
+PLO,Port Lincoln,South Australia,Australia/Adelaide,UTC+10:30,Domestic
+WHY,Whyalla,South Australia,Australia/Adelaide,UTC+10:30,Domestic
+BWT,Burnie/Wynyard,Tasmania,Australia/Hobart,UTC+11,Domestic
+DPO,Devonport,Tasmania,Australia/Hobart,UTC+11,Domestic
+ASP,Alice Springs,Northern Territory,Australia/Darwin,UTC+09:30,Domestic
+BME,Broome,Western Australia,Australia/Perth,UTC+08,Domestic
+BQB,Busselton,Western Australia,Australia/Perth,UTC+08,Domestic
+EPR,Esperance,Western Australia,Australia/Perth,UTC+08,Domestic
+GET,Geraldton,Western Australia,Australia/Perth,UTC+08,Domestic
+KGI,Kalgoorlie,Western Australia,Australia/Perth,UTC+08,Domestic
+KNX,Kununurra,Western Australia,Australia/Perth,UTC+08,Domestic
+KTA,Karratha,Western Australia,Australia/Perth,UTC+08,Domestic
+LEA,Learmonth,Western Australia,Australia/Perth,UTC+08,Domestic
+PHE,Port Hedland,Western Australia,Australia/Perth,UTC+08,Domestic
+PBO,Paraburdoo,Western Australia,Australia/Perth,UTC+08,Domestic
+NLF,Norfolk Island,Norfolk Island,Pacific/Norfolk,UTC+12,Domestic
+GBW,Ginbata (Roy Hill Mine),Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+KFE,Cloudbreak (Fortescue Dave Forrest),Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+OCM,Boolgeeda (Brockman 4 Mine),Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+SLJ,Solomon,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+TEF,Telfer Mine,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+ZNE,Newman,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+KNI,Katanning,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+CJF,Coondewanna,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+NUR,Nullagine,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+JAD,Jandakot,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+TBL,Tableland,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+TKY,Turkey Creek,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+WUN,Wiluna,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+YKA,Kambalda,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+ONG,Mornington,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+LVO,Laverton,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+TPR,Tom Price,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+LNO,Leonora,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+NMR,Noonkanbah,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+MNW,Macdonald Downs,Northern Territory,Australia/Darwin,UTC+09:30,FIFO/Mine Site
+MMG,Mount Magnet,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+NWI,Norwich Park,Queensland,Australia/Brisbane,UTC+10,FIFO/Mine Site
+BQL,Boulia,Queensland,Australia/Brisbane,UTC+10,FIFO/Mine Site
+MMM,Middlemount,Queensland,Australia/Brisbane,UTC+10,FIFO/Mine Site
+MRG,Mareeba,Queensland,Australia/Brisbane,UTC+10,FIFO/Mine Site
+MCV,McArthur River,Northern Territory,Australia/Darwin,UTC+09:30,FIFO/Mine Site
+BDW,Bedford Downs,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+CKW,Christmas Creek,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+YKM,Yakabindie,Western Australia,Australia/Perth,UTC+08,FIFO/Mine Site
+XCH,Christmas Island,Christmas Island,Indian/Christmas,UTC+07,External Territory
+CCK,Cocos (Keeling) Islands,Cocos (Keeling) Islands,Indian/Cocos,UTC+06:30,External Territory
