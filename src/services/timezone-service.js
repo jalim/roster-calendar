@@ -3,51 +3,109 @@
  * Maps IATA airport codes to their respective timezones
  */
 
+const fs = require('fs');
+const path = require('path');
+
 class TimezoneService {
   constructor() {
-    // Map of IATA airport codes to IANA timezone identifiers
-    this.airportTimezones = {
-      // Australian airports
-      'PER': 'Australia/Perth',          // Perth - UTC+8 (no DST)
-      'SYD': 'Australia/Sydney',         // Sydney - UTC+10/11 (DST)
-      'MEL': 'Australia/Melbourne',      // Melbourne - UTC+10/11 (DST)
-      'BNE': 'Australia/Brisbane',       // Brisbane - UTC+10 (no DST)
-      'ADL': 'Australia/Adelaide',       // Adelaide - UTC+9:30/10:30 (DST)
-      'CNS': 'Australia/Brisbane',       // Cairns - UTC+10 (no DST)
-      'DRW': 'Australia/Darwin',         // Darwin - UTC+9:30 (no DST)
-      'HBA': 'Australia/Hobart',         // Hobart - UTC+10/11 (DST)
-      'OOL': 'Australia/Brisbane',       // Gold Coast - UTC+10 (no DST)
-      'CBR': 'Australia/Sydney',         // Canberra - UTC+10/11 (DST)
-      'ASP': 'Australia/Darwin',         // Alice Springs - UTC+9:30 (no DST)
-      'ZNE': 'Australia/Brisbane',       // Newman - UTC+8 (assumed, should verify)
-      
-      // International airports (common Qantas destinations)
-      'LAX': 'America/Los_Angeles',      // Los Angeles
-      'SFO': 'America/Los_Angeles',      // San Francisco
-      'JFK': 'America/New_York',         // New York
-      'LHR': 'Europe/London',            // London
-      'SIN': 'Asia/Singapore',           // Singapore
-      'HKG': 'Asia/Hong_Kong',           // Hong Kong
-      'BKK': 'Asia/Bangkok',             // Bangkok
-      'NRT': 'Asia/Tokyo',               // Tokyo Narita
-      'HND': 'Asia/Tokyo',               // Tokyo Haneda
-      'AKL': 'Pacific/Auckland',         // Auckland
-      'CHC': 'Pacific/Auckland',         // Christchurch
-      'DXB': 'Asia/Dubai',               // Dubai
-      'DOH': 'Asia/Qatar',               // Doha
-      'SCL': 'America/Santiago',         // Santiago
-      'JNB': 'Africa/Johannesburg',      // Johannesburg
-      'BOM': 'Asia/Kolkata',             // Mumbai
-      'DEL': 'Asia/Kolkata',             // Delhi
-      'CGK': 'Asia/Jakarta',             // Jakarta
-      'MNL': 'Asia/Manila',              // Manila
-      'PEK': 'Asia/Shanghai',            // Beijing
-      'PVG': 'Asia/Shanghai',            // Shanghai
-      'ICN': 'Asia/Seoul',               // Seoul
-      'TPE': 'Asia/Taipei',              // Taipei
-      'HNL': 'Pacific/Honolulu',         // Honolulu
-      'YVR': 'America/Vancouver',        // Vancouver
+    const defaultAirportTimezones = {
+      // Australian airports (fallbacks; most are sourced from CSV)
+      'PER': 'Australia/Perth',
+      'SLJ': 'Australia/Perth',
+      'SYD': 'Australia/Sydney',
+      'MEL': 'Australia/Melbourne',
+      'BNE': 'Australia/Brisbane',
+      'ADL': 'Australia/Adelaide',
+      'CNS': 'Australia/Brisbane',
+      'DRW': 'Australia/Darwin',
+      'HBA': 'Australia/Hobart',
+      'OOL': 'Australia/Brisbane',
+      'CBR': 'Australia/Sydney',
+      'ASP': 'Australia/Darwin',
+      'ZNE': 'Australia/Perth',
+
+      // International airports (fallbacks for ports not present in CSV)
+      'NRT': 'Asia/Tokyo',
+      'DXB': 'Asia/Dubai',
+      'DOH': 'Asia/Qatar',
+      'BOM': 'Asia/Kolkata',
+      'CGK': 'Asia/Jakarta',
+      'PEK': 'Asia/Shanghai',
+      'PVG': 'Asia/Shanghai',
+      'ICN': 'Asia/Seoul',
+      'TPE': 'Asia/Taipei'
     };
+
+    const csvAirportTimezones = this.loadAirportTimezonesFromCsv();
+    this.airportTimezones = { ...defaultAirportTimezones, ...csvAirportTimezones };
+  }
+
+  splitCsvLine(line) {
+    const fields = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+
+      if (ch === ',' && !inQuotes) {
+        fields.push(current);
+        current = '';
+        continue;
+      }
+
+      current += ch;
+    }
+
+    fields.push(current);
+    return fields;
+  }
+
+  loadAirportTimezonesFromCsv() {
+    const csvPath = path.join(__dirname, '..', 'data', 'qantas_airports_timezones.csv');
+
+    let raw;
+    try {
+      raw = fs.readFileSync(csvPath, 'utf8');
+    } catch {
+      return {};
+    }
+
+    const lines = raw
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean);
+
+    if (lines.length < 2) return {};
+
+    const headers = this.splitCsvLine(lines[0]).map(h => String(h).trim());
+    const codeIdx = headers.findIndex(h => h.toLowerCase().includes('iata'));
+    const tzIdx = headers.findIndex(h => h.toLowerCase().includes('time zone') || h.toLowerCase().includes('iana'));
+    if (codeIdx < 0 || tzIdx < 0) return {};
+
+    const mapping = {};
+    for (const line of lines.slice(1)) {
+      const fields = this.splitCsvLine(line);
+      const code = fields[codeIdx] ? String(fields[codeIdx]).trim().toUpperCase() : '';
+      const tz = fields[tzIdx] ? String(fields[tzIdx]).trim() : '';
+
+      if (!code || !/^[A-Z0-9]{3}$/.test(code)) continue;
+      if (!tz) continue;
+
+      mapping[code] = tz;
+    }
+
+    return mapping;
   }
 
   /**

@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.*
+!.env.example
 *.log
 .DS_Store
 coverage/
@@ -9,3 +11,9 @@ dist/
 build/
 *.ics
 uploads/
+
+# Local outputs / personal data
+imap-diagnose*.out
+data/
+examples/webCisRoster_*.txt
+

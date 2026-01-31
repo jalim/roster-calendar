@@ -19,8 +19,8 @@ describe('QantasRosterParser', () => {
   test('should parse employee information', () => {
     const roster = parser.parse(sampleRosterText);
 
-    expect(roster.employee.name).toBe('MULLAN LR');
-    expect(roster.employee.staffNo).toBe('174423');
+    expect(roster.employee.name).toBe('DOE J');
+    expect(roster.employee.staffNo).toBe('000000');
     expect(roster.employee.category).toBe('F/O-B737');
     expect(roster.employee.base).toBe('PER');
     expect(roster.employee.line).toBe('PLH');
@@ -35,10 +35,24 @@ describe('QantasRosterParser', () => {
 
   test('should identify D/O (Day Off) entries', () => {
     const roster = parser.parse(sampleRosterText);
-    const dayOffEntries = roster.entries.filter(e => e.dutyType === 'OFF');
+    const dayOffEntries = roster.entries.filter(e => e.dutyType === 'DAY_OFF');
 
     expect(dayOffEntries.length).toBeGreaterThan(0);
     expect(dayOffEntries[0].dutyCode).toBe('D/O');
+  });
+
+  test('should identify AV as an Available Day', () => {
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/sample-webcis-roster.txt'),
+      'utf-8'
+    );
+    const roster = parser.parse(text);
+    const avEntries = roster.entries.filter(e => e.dutyCode === 'AV');
+
+    expect(avEntries.length).toBeGreaterThan(0);
+    avEntries.forEach(e => {
+      expect(e.dutyType).toBe('AVAILABLE_DAY');
+    });
   });
 
   test('should identify flight duty entries', () => {
@@ -89,5 +103,42 @@ describe('QantasRosterParser', () => {
     expect(firstEntry.day).toBeDefined();
     expect(firstEntry.dayOfWeek).toBeDefined();
     expect(typeof firstEntry.day).toBe('number');
+  });
+
+  test('should extract roster period start/end from header', () => {
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/sample-webcis-roster.txt'),
+      'utf-8'
+    );
+    const roster = parser.parse(text);
+
+    expect(roster.summary).toBeDefined();
+    expect(roster.summary.periodStart).toEqual({ year: 2025, month: 11, day: 29 });
+    expect(roster.summary.periodEnd).toEqual({ year: 2026, month: 0, day: 26 });
+
+    const period = parser.getRosterPeriod(roster);
+    expect(period).toEqual({ startMonth: 11, startYear: 2025, endMonth: 0, endYear: 2026 });
+  });
+
+  test('should extract flight legs from Pattern Details section', () => {
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/sample-webcis-roster.txt'),
+      'utf-8'
+    );
+    const roster = parser.parse(text);
+
+    expect(Array.isArray(roster.flights)).toBe(true);
+    expect(roster.flights.length).toBeGreaterThan(0);
+
+    // Known flight from Pattern Details
+    expect(roster.flights.some(f => f.flightNumber === '940')).toBe(true);
+    const first = roster.flights[0];
+    expect(first).toHaveProperty('departPort');
+    expect(first).toHaveProperty('arrivePort');
+    expect(first).toHaveProperty('departTime');
+    expect(first).toHaveProperty('arriveTime');
+    expect(first).toHaveProperty('year');
+    expect(first).toHaveProperty('month');
+    expect(first).toHaveProperty('day');
   });
 });

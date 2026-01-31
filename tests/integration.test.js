@@ -45,30 +45,32 @@ describe('Roster to ICS Integration', () => {
     const icsData = await icsService.generateICS(roster);
     
     // Check that timezone info is in the descriptions
-    expect(icsData).toContain('Timezone: Australia/');
+    expect(icsData).toContain('Timezone');
   });
 
   test('flight events should have correct timezone based on port', async () => {
-    const roster = parser.parse(sampleRosterText);
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/sample-webcis-roster.txt'),
+      'utf-8'
+    );
+    const roster = parser.parse(text);
     const events = icsService.convertRosterToEvents(roster);
     
-    // Find event with BNE port
+    // Find a flight-leg event that departs BNE
     const bneEvent = events.find(e => 
-      e.description && e.description.includes('Port: BNE')
+      e.description && e.description.includes('From: BNE')
     );
     
-    if (bneEvent) {
-      expect(bneEvent.description).toContain('Timezone: Australia/Brisbane');
-    }
+    expect(bneEvent).toBeDefined();
+    expect(bneEvent.description).toContain('Timezone (Depart): Australia/Brisbane');
     
-    // Find event with SYD port
+    // Find a flight-leg event that departs SYD
     const sydEvent = events.find(e => 
-      e.description && e.description.includes('Port: SYD')
+      e.description && e.description.includes('From: SYD')
     );
     
-    if (sydEvent) {
-      expect(sydEvent.description).toContain('Timezone: Australia/Sydney');
-    }
+    expect(sydEvent).toBeDefined();
+    expect(sydEvent.description).toContain('Timezone (Depart): Australia/Sydney');
   });
 
   test('events without port should use employee base timezone', async () => {
@@ -102,19 +104,19 @@ describe('Roster to ICS Integration', () => {
     expect(passiveEvents.length).toBeGreaterThan(0);
   });
 
-  test('day off entries should not appear in calendar', async () => {
+  test('day off entries should appear as all-day events', async () => {
     const roster = parser.parse(sampleRosterText);
-    const dayOffEntries = roster.entries.filter(e => e.dutyType === 'OFF');
-    
+    const dayOffEntries = roster.entries.filter(e => e.dutyType === 'DAY_OFF');
+
     // There should be D/O entries in the roster
     expect(dayOffEntries.length).toBeGreaterThan(0);
-    
+
     const events = icsService.convertRosterToEvents(roster);
-    const dayOffEvents = events.filter(e => 
-      e.title && e.title.toLowerCase().includes('day off')
-    );
-    
-    // But they should not appear in the events
-    expect(dayOffEvents.length).toBe(0);
+    const dayOffEvents = events.filter(e => e.title === 'Day Off');
+
+    expect(dayOffEvents.length).toBeGreaterThan(0);
+    dayOffEvents.forEach(event => {
+      expect(event.duration).toEqual({ days: 1 });
+    });
   });
 });

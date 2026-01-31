@@ -4,10 +4,36 @@
 
 const ics = require('ics');
 const TimezoneService = require('./timezone-service');
+const { DateTime } = require('luxon');
+const crypto = require('crypto');
 
 class ICSCalendarService {
   constructor() {
     this.timezoneService = new TimezoneService();
+  }
+
+  stableUidForEntry({ year, month, day, entry, employee }) {
+    const payload = {
+      year,
+      month,
+      day,
+      dutyType: entry && entry.dutyType,
+      dutyCode: entry && entry.dutyCode,
+      service: entry && entry.service,
+      port: entry && entry.port,
+      signOn: entry && entry.signOn,
+      signOff: entry && entry.signOff,
+      passive: entry && entry.passive,
+      base: employee && employee.base
+    };
+
+    const hash = crypto
+      .createHash('sha1')
+      .update(JSON.stringify(payload))
+      .digest('hex')
+      .slice(0, 16);
+
+    return `${year}-${month + 1}-${day}-${hash}@roster-calendar`;
   }
 
   /**
@@ -30,6 +56,66 @@ class ICSCalendarService {
   }
 
   /**
+   * Convert multiple rosters into a single ICS calendar string.
+   * Events are merged and de-duplicated by UID.
+   * @param {Array<Object>} rosters - Array of parsed roster objects
+   * @returns {Promise<string>} ICS calendar string
+   */
+  async generateICSForRosters(rosters) {
+    const events = this.convertRostersToEvents(rosters);
+
+    return new Promise((resolve, reject) => {
+      ics.createEvents(events, (error, value) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(value);
+        }
+      });
+    });
+  }
+
+  /**
+   * Convert multiple rosters to a merged set of events.
+   * @param {Array<Object>} rosters
+   * @returns {Array}
+   */
+  convertRostersToEvents(rosters) {
+    const rosterList = Array.isArray(rosters) ? rosters.filter(Boolean) : [];
+    const allEvents = [];
+
+    for (const roster of rosterList) {
+      const events = this.convertRosterToEvents(roster);
+      for (const event of events) {
+        allEvents.push(event);
+      }
+    }
+
+    // Deduplicate by UID (ics library uses uid as event identifier)
+    const byUid = new Map();
+    for (const event of allEvents) {
+      if (!event || !event.uid) continue;
+      if (!byUid.has(event.uid)) {
+        byUid.set(event.uid, event);
+      }
+    }
+
+    const merged = Array.from(byUid.values());
+    // Stable ordering helps keep diffs small for subscribers
+    merged.sort((a, b) => {
+      const aStart = Array.isArray(a.start) ? a.start.join('-') : '';
+      const bStart = Array.isArray(b.start) ? b.start.join('-') : '';
+      if (aStart < bStart) return -1;
+      if (aStart > bStart) return 1;
+      const aUid = String(a.uid);
+      const bUid = String(b.uid);
+      return aUid.localeCompare(bUid);
+    });
+
+    return merged;
+  }
+
+  /**
    * Convert roster entries to calendar events
    * @param {Object} roster - Parsed roster data
    * @returns {Array} Array of event objects
@@ -44,6 +130,16 @@ class ICSCalendarService {
     let currentYear = period.startYear;
     let previousDay = 0;
 
+    const hasDutyPatterns = Array.isArray(roster.dutyPatterns) && roster.dutyPatterns.length > 0;
+
+    // Prefer dutyPatterns for flight duty events (timezone-correct report/release)
+    if (hasDutyPatterns) {
+      for (const dutyPattern of roster.dutyPatterns) {
+        const dutyEvent = this.createDutyEventFromPattern(dutyPattern, roster.employee);
+        if (dutyEvent) events.push(dutyEvent);
+      }
+    }
+
     for (const entry of roster.entries) {
       // Detect month rollover
       if (entry.day < previousDay) {
@@ -54,13 +150,185 @@ class ICSCalendarService {
       }
       previousDay = entry.day;
 
+      // If we have Pattern Details, flight duty events come from dutyPatterns to avoid duplicates
+      if (hasDutyPatterns && entry.dutyType === 'FLIGHT') {
+        continue;
+      }
+
       const event = this.createEventFromEntry(entry, currentMonth, currentYear, roster.employee);
       if (event) {
         events.push(event);
       }
     }
 
+    // Add individual flight-leg events if Pattern Details were parsed
+    if (Array.isArray(roster.flights) && roster.flights.length > 0) {
+      for (const flightLeg of roster.flights) {
+        const flightEvent = this.createEventFromFlightLeg(flightLeg, roster.employee);
+        if (flightEvent) events.push(flightEvent);
+      }
+    }
+
     return events;
+  }
+
+  getTimezoneForPortOrBase(port, employee) {
+    return this.timezoneService.getTimezone(port || (employee && employee.base));
+  }
+
+  toUtcDateArray({ year, month, day, time, timezone, addDays = 0 }) {
+    if (!timezone || !time) return null;
+    const [hour, minute] = time;
+    const dt = DateTime.fromObject(
+      { year, month, day, hour, minute },
+      { zone: timezone }
+    ).plus({ days: addDays });
+
+    if (!dt.isValid) return null;
+    const utc = dt.toUTC();
+    return [utc.year, utc.month, utc.day, utc.hour, utc.minute];
+  }
+
+  createDutyEventFromPattern(dutyPattern, employee) {
+    if (!dutyPattern || !Array.isArray(dutyPattern.legs) || dutyPattern.legs.length === 0) return null;
+
+    // Determine start date: use DATED token if present, otherwise first leg date
+    const startDate = dutyPattern.dated
+      ? { year: dutyPattern.dated.year, month: dutyPattern.dated.month, day: dutyPattern.dated.day }
+      : { year: dutyPattern.legs[0].year, month: dutyPattern.legs[0].month, day: dutyPattern.legs[0].day };
+
+    const endLeg = dutyPattern.legs[dutyPattern.legs.length - 1];
+    const endDate = { year: endLeg.year, month: endLeg.month, day: endLeg.day };
+
+    const reportPort = dutyPattern.reportPort || dutyPattern.legs[0].departPort || (employee && employee.base);
+    const releasePort = dutyPattern.releasePort || endLeg.arrivePort || (employee && employee.base);
+
+    const reportTz = this.getTimezoneForPortOrBase(reportPort, employee);
+    const releaseTz = this.getTimezoneForPortOrBase(releasePort, employee);
+
+    const reportTime = this.parseTime(dutyPattern.reportTime);
+    const releaseTime = this.parseTime(dutyPattern.releaseTime);
+
+    if (!reportTime || !releaseTime || !reportTz || !releaseTz) return null;
+
+    let startUtc = this.toUtcDateArray({
+      year: startDate.year,
+      month: startDate.month + 1,
+      day: startDate.day,
+      time: reportTime,
+      timezone: reportTz
+    });
+    let endUtc = this.toUtcDateArray({
+      year: endDate.year,
+      month: endDate.month + 1,
+      day: endDate.day,
+      time: releaseTime,
+      timezone: releaseTz
+    });
+
+    if (!startUtc || !endUtc) return null;
+
+    // If end is before start in UTC, assume release time is next day in release TZ
+    const startDt = DateTime.utc(...startUtc);
+    let endDt = DateTime.utc(...endUtc);
+    if (endDt < startDt) {
+      endUtc = this.toUtcDateArray({
+        year: endDate.year,
+        month: endDate.month + 1,
+        day: endDate.day,
+        time: releaseTime,
+        timezone: releaseTz,
+        addDays: 1
+      });
+      endDt = DateTime.utc(...endUtc);
+    }
+
+    const title = `Duty: ${dutyPattern.dutyCode || 'Flight Duty'}`;
+
+    const legSummary = dutyPattern.legs
+      .map(l => `${l.flightNumber} ${l.departPort}-${l.arrivePort}`)
+      .join(', ');
+
+    let description = `Duty: ${dutyPattern.dutyCode || 'Flight Duty'}\nReport: ${reportPort} ${dutyPattern.reportTime || ''}\nRelease: ${releasePort} ${dutyPattern.releaseTime || ''}`;
+    if (legSummary) description += `\nFlights: ${legSummary}`;
+    description += `\n\nTimezone (Report): ${reportTz}\nTimezone (Release): ${releaseTz}`;
+
+    return {
+      title,
+      description,
+      start: startUtc,
+      end: endUtc,
+      productId: 'roster-calendar/ics',
+      calName: `${employee.name || 'Pilot'} Roster`,
+      uid: `${startUtc[0]}-${startUtc[1]}-${startUtc[2]}-duty-${dutyPattern.dutyCode || 'flight'}@roster-calendar`,
+      startInputType: 'utc',
+      startOutputType: 'utc',
+      endInputType: 'utc',
+      endOutputType: 'utc'
+    };
+  }
+
+  createEventFromFlightLeg(flightLeg, employee) {
+    if (!flightLeg) return null;
+
+    const departTz = this.getTimezoneForPortOrBase(flightLeg.departPort, employee);
+    const arriveTz = this.getTimezoneForPortOrBase(flightLeg.arrivePort, employee);
+    const startTime = this.parseTime(flightLeg.departTime);
+    const endTime = this.parseTime(flightLeg.arriveTime);
+    if (!startTime || !endTime || !departTz || !arriveTz) return null;
+
+    const title = `Flight ${flightLeg.flightNumber}: ${flightLeg.departPort}-${flightLeg.arrivePort}`;
+
+    let description = `Flight: ${flightLeg.flightNumber}\nFrom: ${flightLeg.departPort}\nTo: ${flightLeg.arrivePort}\nDepart: ${flightLeg.departTime}\nArrive: ${flightLeg.arriveTime}`;
+    if (flightLeg.passive) description += `\nType: Passive (Positioning)`;
+    description += `\n\nTimezone (Depart): ${departTz}\nTimezone (Arrive): ${arriveTz}`;
+
+    let startUtc = this.toUtcDateArray({
+      year: flightLeg.year,
+      month: flightLeg.month + 1,
+      day: flightLeg.day,
+      time: startTime,
+      timezone: departTz
+    });
+    let endUtc = this.toUtcDateArray({
+      year: flightLeg.year,
+      month: flightLeg.month + 1,
+      day: flightLeg.day,
+      time: endTime,
+      timezone: arriveTz
+    });
+
+    if (!startUtc || !endUtc) return null;
+
+    const startDt = DateTime.utc(...startUtc);
+    let endDt = DateTime.utc(...endUtc);
+    if (endDt < startDt) {
+      endUtc = this.toUtcDateArray({
+        year: flightLeg.year,
+        month: flightLeg.month + 1,
+        day: flightLeg.day,
+        time: endTime,
+        timezone: arriveTz,
+        addDays: 1
+      });
+      endDt = DateTime.utc(...endUtc);
+    }
+
+    const event = {
+      title,
+      description,
+      start: startUtc,
+      productId: 'roster-calendar/ics',
+      calName: `${employee.name || 'Pilot'} Roster`,
+      uid: `${flightLeg.year}-${flightLeg.month + 1}-${flightLeg.day}-flight-${flightLeg.flightNumber}-${flightLeg.departPort}-${flightLeg.arrivePort}@roster-calendar`,
+      startInputType: 'utc',
+      startOutputType: 'utc'
+    };
+
+    event.end = endUtc;
+    event.endInputType = 'utc';
+    event.endOutputType = 'utc';
+    return event;
   }
 
   /**
@@ -72,27 +340,38 @@ class ICSCalendarService {
    * @returns {Object|null} Event object or null if should be skipped
    */
   createEventFromEntry(entry, month, year, employee) {
-    // Skip D/O (Day Off) entries - pilots don't need these in their calendar
-    if (entry.dutyType === 'OFF') {
-      return null;
-    }
-
     const day = entry.day;
     let title, description, startTime, endTime, duration, timezone;
 
     // Determine timezone from port or base
     const port = entry.port || employee.base;
-    timezone = this.timezoneService.getTimezone(port);
+    timezone = this.getTimezoneForPortOrBase(port, employee);
 
     switch (entry.dutyType) {
       case 'FLIGHT':
-        title = `Flight: ${entry.dutyCode}`;
-        if (entry.service) {
-          title += ` - ${entry.service}`;
-        }
+        title = entry.dutyCode ? `Duty: ${entry.dutyCode}` : 'Duty';
+        if (entry.service) title += ` - ${entry.service}`;
         description = this.buildFlightDescription(entry);
         startTime = this.parseTime(entry.signOn);
         endTime = this.parseTime(entry.signOff);
+        break;
+
+      case 'DAY_OFF':
+        title = 'Day Off';
+        description = 'Day off';
+        duration = { days: 1 };
+        break;
+
+      case 'AVAILABLE_DAY':
+        title = 'Available Day';
+        description = 'Available day';
+        duration = { days: 1 };
+        break;
+
+      case 'BLOCK_LEAVE':
+        title = 'Block Leave';
+        description = 'Block leave';
+        duration = { days: 1 };
         break;
 
       case 'RESERVE':
@@ -112,7 +391,6 @@ class ICSCalendarService {
       case 'ANNUAL_LEAVE':
         title = 'Annual Leave';
         description = 'Annual leave';
-        startTime = [0, 0];
         duration = { days: 1 };
         break;
 
@@ -128,12 +406,10 @@ class ICSCalendarService {
     const event = {
       title,
       description,
-      start: [year, month + 1, day, ...(startTime || [0, 0])],
+      start: duration && duration.days ? [year, month + 1, day] : [year, month + 1, day, ...(startTime || [0, 0])],
       productId: 'roster-calendar/ics',
       calName: `${employee.name || 'Pilot'} Roster`,
-      uid: `${year}-${month + 1}-${day}-${entry.dutyCode || 'duty'}-${Math.random().toString(36).substr(2, 9)}@roster-calendar`,
-      startInputType: 'utc',
-      startOutputType: 'utc'
+      uid: this.stableUidForEntry({ year, month, day, entry, employee })
     };
 
     // Add timezone information
@@ -146,29 +422,41 @@ class ICSCalendarService {
       // embedded in the ICS file. The times are stored in UTC internally.
     }
 
-    // Set end time or duration
-    if (endTime) {
-      // Check if end time crosses midnight (next day)
-      if (endTime[0] < (startTime ? startTime[0] : 0) || 
-          (entry.signOff && entry.signOff.includes('+'))) {
-        // Event ends the next day
-        const nextDay = new Date(year, month, day + 1);
-        event.end = [nextDay.getFullYear(), nextDay.getMonth() + 1, nextDay.getDate(), ...endTime];
-        event.endInputType = 'utc';
-        event.endOutputType = 'utc';
-      } else {
-        event.end = [year, month + 1, day, ...endTime];
-        event.endInputType = 'utc';
-        event.endOutputType = 'utc';
+    // Convert timed (non-all-day) entries to UTC so they display correctly everywhere.
+    if (!duration || !duration.days) {
+      if (startTime && timezone) {
+        const startUtc = this.toUtcDateArray({ year, month: month + 1, day, time: startTime, timezone });
+        if (startUtc) {
+          event.start = startUtc;
+          event.startInputType = 'utc';
+          event.startOutputType = 'utc';
+        }
       }
-    } else if (duration) {
-      event.duration = duration;
-    } else if (startTime) {
-      // Default duration of 8 hours if we have a start but no end
-      event.duration = { hours: 8 };
+      if (endTime && timezone) {
+        let endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone });
+        // Handle midnight rollover in the same timezone
+        if (endUtc && startTime) {
+          const startUtc = event.start;
+          const startDt = startUtc && startUtc.length === 5 ? DateTime.utc(...startUtc) : null;
+          const endDt = DateTime.utc(...endUtc);
+          if (startDt && endDt < startDt) {
+            endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone, addDays: 1 });
+          }
+        }
+        if (endUtc) {
+          event.end = endUtc;
+          event.endInputType = 'utc';
+          event.endOutputType = 'utc';
+        }
+      } else if (duration) {
+        event.duration = duration;
+      } else if (startTime) {
+        event.duration = { hours: 8 };
+      } else {
+        event.duration = { days: 1 };
+      }
     } else {
-      // All-day event
-      event.duration = { days: 1 };
+      event.duration = duration;
     }
 
     return event;
@@ -180,7 +468,7 @@ class ICSCalendarService {
    * @returns {string} Description text
    */
   buildFlightDescription(entry) {
-    let desc = `Duty: ${entry.dutyCode}\n`;
+    let desc = `Duty: ${entry.dutyCode || 'Flight'}\n`;
     
     if (entry.service) {
       desc += `Flight(s): ${entry.service}\n`;
@@ -208,10 +496,6 @@ class ICSCalendarService {
     
     if (entry.port) {
       desc += `Port: ${entry.port}\n`;
-    }
-    
-    if (entry.code) {
-      desc += `Code: ${entry.code}`;
     }
     
     return desc.trim();

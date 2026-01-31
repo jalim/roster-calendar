@@ -4,14 +4,34 @@
 
 const express = require('express');
 const multer = require('multer');
-const QantasRosterParser = require('../parsers/qantas-roster-parser');
 const ICSCalendarService = require('../services/ics-calendar-service');
+const rosterStore = require('../services/roster-store');
+const { pollInboxOnce } = require('../services/inbox-roster-poller');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// In-memory storage for rosters (in production, use a database)
-const rosters = new Map();
+function debugEnabled() {
+  const v = String(process.env.ROSTER_DEBUG_ENDPOINTS || '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'y', 'on'].includes(v);
+}
+
+// Debug/troubleshooting endpoints (off by default)
+// Enable with ROSTER_DEBUG_ENDPOINTS=true
+router.get('/_debug/rosters', (req, res) => {
+  if (!debugEnabled()) return res.status(404).json({ error: 'Not found' });
+  return res.json({ rosterIds: rosterStore.listRosterIds() });
+});
+
+router.post('/_debug/email/poll', async (req, res) => {
+  if (!debugEnabled()) return res.status(404).json({ error: 'Not found' });
+  try {
+    const result = await pollInboxOnce(process.env, console);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err && err.message ? err.message : 'Failed to poll inbox' });
+  }
+});
 
 /**
  * Upload a roster file
@@ -24,14 +44,7 @@ router.post('/upload', upload.single('roster'), async (req, res) => {
     }
 
     const rosterText = req.file.buffer.toString('utf-8');
-    const parser = new QantasRosterParser();
-    const roster = parser.parse(rosterText);
-
-    // Generate a unique ID for this roster
-    const rosterId = `${roster.employee.staffNo || Date.now()}`;
-    
-    // Store the roster
-    rosters.set(rosterId, roster);
+    const { rosterId, roster } = rosterStore.ingestRosterText(rosterText);
 
     res.json({
       success: true,
@@ -56,14 +69,7 @@ router.post('/text', express.text({ type: 'text/plain', limit: '1mb' }), async (
       return res.status(400).json({ error: 'No roster text provided' });
     }
 
-    const parser = new QantasRosterParser();
-    const roster = parser.parse(req.body);
-
-    // Generate a unique ID for this roster
-    const rosterId = `${roster.employee.staffNo || Date.now()}`;
-    
-    // Store the roster
-    rosters.set(rosterId, roster);
+    const { rosterId, roster } = rosterStore.ingestRosterText(req.body);
 
     res.json({
       success: true,
@@ -85,14 +91,14 @@ router.post('/text', express.text({ type: 'text/plain', limit: '1mb' }), async (
 router.get('/:rosterId/calendar.ics', async (req, res) => {
   try {
     const { rosterId } = req.params;
-    const roster = rosters.get(rosterId);
+    const rosterBucket = rosterStore.getRosterBucket(rosterId);
 
-    if (!roster) {
+    if (!rosterBucket) {
       return res.status(404).json({ error: 'Roster not found' });
     }
 
     const icsService = new ICSCalendarService();
-    const icsData = await icsService.generateICS(roster);
+    const icsData = await icsService.generateICSForRosters(rosterBucket.rosters);
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="roster-${rosterId}.ics"`);
@@ -110,17 +116,20 @@ router.get('/:rosterId/calendar.ics', async (req, res) => {
 router.get('/:rosterId', (req, res) => {
   try {
     const { rosterId } = req.params;
-    const roster = rosters.get(rosterId);
+    const rosterBucket = rosterStore.getRosterBucket(rosterId);
 
-    if (!roster) {
+    if (!rosterBucket) {
       return res.status(404).json({ error: 'Roster not found' });
     }
 
+    const combinedEntries = rosterBucket.rosters.flatMap(r => Array.isArray(r.entries) ? r.entries : []);
+
     res.json({
       rosterId,
-      employee: roster.employee,
-      entriesCount: roster.entries.length,
-      entries: roster.entries
+      employee: rosterBucket.employee,
+      rostersCount: rosterBucket.rosters.length,
+      entriesCount: combinedEntries.length,
+      entries: combinedEntries
     });
   } catch (error) {
     console.error('Error retrieving roster:', error);

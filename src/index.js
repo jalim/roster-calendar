@@ -7,6 +7,7 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
 
 const rosterRoutes = require('./routes/roster-routes');
+const { startInboxRosterPolling } = require('./services/inbox-roster-poller');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,9 +41,23 @@ app.get('/', (req, res) => {
 
 // Start server
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Roster Calendar Service running on port ${PORT}`);
   });
+
+  const inboxPoller = startInboxRosterPolling(process.env, console);
+
+  const shutdown = () => {
+    try {
+      if (inboxPoller && typeof inboxPoller.stop === 'function') inboxPoller.stop();
+    } catch (_) {
+      // ignore
+    }
+    server.close(() => process.exit(0));
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 module.exports = app;

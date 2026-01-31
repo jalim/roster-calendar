@@ -1,0 +1,32 @@
+                          QANTAS AIRWAYS LIMITED                    31Jan26 1200
+                     SH Flight Crew Roster - Bid Period 0000
+
+
+     Name    :  DOE J                                        Category:  F/O-B737
+     Staff No:  000000                                       Base    :  PER
+     Snrty No:    0000                                       Line    :  PLH
+
+Date    Duty(Role)  Service                     S-On S-Of Duty  Credit Port Code
+
+--------------------------------------------------------------------------------
+29 Mon  8001A1       940/950                     0615 1600  9:45  7:35  PER  AW01
+30 Tue  D/O                                                                 AW01
+31 Wed  AV                                                                  AW01
+01 Thu  PLN                                                                 AW01
+--------------------------------------------------------------------------------
+
+Available Date/Time this (next) BP       : 29Dec25 0000 (26Jan26 0000)
+
+Pattern Details
+
+29Dec       940  PER  0615 BNE  0900  73H   3:45
+29Dec       950  BNE  1000 SYD  1215  73H   2:15
+30Dec       960  SYD  1300 MEL  1430  73H   1:30
+                 Rpt  0615 Rls  1600        MEL
+                                                         8001A1 DATED 29Dec25
+
+05Jan       111  PER  0700 BNE  0900  73H   2:00
+                 Rpt  0700 Rls  1200        BNE
+06Jan       112  PER  0700 BNE  0900  73H   2:00
+                 Rpt  0700 Rls  1200        BNE
+                                                         8130 DATED 05Jan26

@@ -2,8 +2,8 @@
                      SH Flight Crew Roster - Bid Period 3695
 
 
-     Name    :  MULLAN LR                                    Category:  F/O-B737
-     Staff No:  174423                                       Base    :  PER
+     Name    :  DOE J                                        Category:  F/O-B737
+     Staff No:  000000                                       Base    :  PER
      Snrty No:    2248                                       Line    :  PLH
      Mailbox :       0                                       WorkRule:  QFSH
                                                              PSN     :  20    
