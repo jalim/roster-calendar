@@ -47,17 +47,40 @@ if (require.main === module) {
 
   const inboxPoller = startInboxRosterPolling(process.env, console);
 
-  const shutdown = () => {
+  process.on('uncaughtException', err => {
+    console.error('[fatal] uncaughtException', err);
+    // Let the process exit; systemd will restart it if configured.
+  });
+
+  process.on('unhandledRejection', reason => {
+    console.error('[fatal] unhandledRejection', reason);
+    // Let the process exit; systemd will restart it if configured.
+  });
+
+  process.on('exit', code => {
+    console.log(`[lifecycle] process exit code=${code}`);
+  });
+
+  const shutdown = signal => {
+    console.log(`[lifecycle] received ${signal}; shutting down`);
     try {
       if (inboxPoller && typeof inboxPoller.stop === 'function') inboxPoller.stop();
     } catch (_) {
       // ignore
     }
+
+    const forceExit = setTimeout(() => {
+      console.warn('[lifecycle] force exiting after 10s');
+      process.exit(0);
+    }, 10_000);
+    forceExit.unref();
+
     server.close(() => process.exit(0));
   };
 
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGHUP', () => shutdown('SIGHUP'));
 }
 
 module.exports = app;

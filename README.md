@@ -192,6 +192,10 @@ Run tests in watch mode:
 npm run test:watch
 ```
 
+## Deployment
+
+See [docs/deploy-proxmox-lxc-cloudflare-tunnel.md](docs/deploy-proxmox-lxc-cloudflare-tunnel.md) for a step-by-step guide to running this service long-term in a Proxmox LXC container and exposing it via a Cloudflare Tunnel.
+
 ## Email Integration
 
 The service can ingest rosters from email in two ways:
