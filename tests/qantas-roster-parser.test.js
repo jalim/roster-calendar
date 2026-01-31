@@ -64,7 +64,7 @@ describe('QantasRosterParser', () => {
 
   test('should parse flight entry with service number', () => {
     const roster = parser.parse(sampleRosterText);
-    const flightEntry = roster.entries.find(e => e.service === '940');
+    const flightEntry = roster.entries.find(e => e.service === 'QF940');
 
     expect(flightEntry).toBeDefined();
     expect(flightEntry.dutyCode).toBe('8026A4');
@@ -131,7 +131,7 @@ describe('QantasRosterParser', () => {
     expect(roster.flights.length).toBeGreaterThan(0);
 
     // Known flight from Pattern Details
-    expect(roster.flights.some(f => f.flightNumber === '940')).toBe(true);
+    expect(roster.flights.some(f => f.flightNumber === 'QF940')).toBe(true);
     const first = roster.flights[0];
     expect(first).toHaveProperty('departPort');
     expect(first).toHaveProperty('arrivePort');
@@ -140,5 +140,13 @@ describe('QantasRosterParser', () => {
     expect(first).toHaveProperty('year');
     expect(first).toHaveProperty('month');
     expect(first).toHaveProperty('day');
+  });
+
+  test('should prefix QF for numeric flight numbers', () => {
+    expect(parser.normalizeFlightNumber('775')).toBe('QF775');
+    expect(parser.normalizeFlightNumber('QF775')).toBe('QF775');
+    expect(parser.normalizeService('940')).toBe('QF940');
+    expect(parser.normalizeService('P940')).toBe('QF940');
+    expect(parser.normalizeService('940/941')).toBe('QF940/QF941');
   });
 });

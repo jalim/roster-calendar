@@ -54,6 +54,7 @@ function hydrateStore(serialized) {
 
 let persistenceInitialized = false;
 let persistWriteChain = Promise.resolve();
+let persistenceErrorLogged = false;
 
 function initPersistence(env = process.env) {
   if (persistenceInitialized) return;
@@ -69,6 +70,12 @@ function initPersistence(env = process.env) {
     const parsed = JSON.parse(raw);
     hydrateStore(parsed);
   } catch (err) {
+    if (!persistenceErrorLogged) {
+      persistenceErrorLogged = true;
+      console.warn(
+        `[persist] failed to read/parse store at ${storePath}: ${err && err.message ? err.message : String(err)}`
+      );
+    }
     // Corrupt or unreadable store should not crash the service.
     // Start with an empty store.
     rosters.clear();
@@ -88,7 +95,13 @@ function persistNow(env = process.env) {
       fs.writeFileSync(tmpPath, json, 'utf8');
       fs.renameSync(tmpPath, storePath);
     })
-    .catch(() => {
+    .catch(err => {
+      if (!persistenceErrorLogged) {
+        persistenceErrorLogged = true;
+        console.warn(
+          `[persist] failed to write store at ${storePath}: ${err && err.message ? err.message : String(err)}`
+        );
+      }
       // Ignore persistence errors; keep in-memory behavior.
     });
 

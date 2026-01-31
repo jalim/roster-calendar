@@ -43,7 +43,7 @@ describe('ICSCalendarService', () => {
     expect(icsCombined).toContain('END:VCALENDAR');
 
     // Should include at least one known flight from Pattern Details
-    expect(icsCombined).toContain('Flight 940');
+    expect(icsCombined).toContain('QF940 PER-BNE');
   });
 
   test('should deduplicate events by UID when the same roster is merged twice', async () => {
@@ -91,11 +91,11 @@ describe('ICSCalendarService', () => {
     const parsed = parser.parse(text);
 
     const events = icsService.convertRosterToEvents(parsed);
-    const flightEvents = events.filter(e => e.title && e.title.startsWith('Flight '));
+    const flightEvents = events.filter(e => e.title && String(e.title).includes(' PER-'));
 
     expect(flightEvents.length).toBeGreaterThan(0);
     // Should include a known flight number from the sample roster Pattern Details
-    expect(flightEvents.some(e => String(e.title).includes('940'))).toBe(true);
+    expect(flightEvents.some(e => String(e.title).includes('QF940 PER-BNE'))).toBe(true);
   });
 
   test('should not include award codes in descriptions', () => {

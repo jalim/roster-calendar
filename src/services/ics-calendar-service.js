@@ -277,7 +277,12 @@ class ICSCalendarService {
     const endTime = this.parseTime(flightLeg.arriveTime);
     if (!startTime || !endTime || !departTz || !arriveTz) return null;
 
-    const title = `Flight ${flightLeg.flightNumber}: ${flightLeg.departPort}-${flightLeg.arrivePort}`;
+    const localDepart = String(flightLeg.departTime || '').trim();
+    const localArrive = String(flightLeg.arriveTime || '').trim();
+    const timeRange = (localDepart && localArrive) ? `${localDepart}-${localArrive}` : '';
+    const paxPrefix = flightLeg.passive ? 'PAX ' : '';
+
+    const title = `${paxPrefix}${flightLeg.flightNumber} ${flightLeg.departPort}-${flightLeg.arrivePort}${timeRange ? ` ${timeRange}` : ''}`;
 
     let description = `Flight: ${flightLeg.flightNumber}\nFrom: ${flightLeg.departPort}\nTo: ${flightLeg.arrivePort}\nDepart: ${flightLeg.departTime}\nArrive: ${flightLeg.arriveTime}`;
     if (flightLeg.passive) description += `\nType: Passive (Positioning)`;

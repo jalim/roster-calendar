@@ -4,6 +4,36 @@
  */
 
 class QantasRosterParser {
+  normalizeFlightNumber(flightNumber) {
+    if (flightNumber === null || flightNumber === undefined) return flightNumber;
+
+    const value = String(flightNumber).trim().toUpperCase();
+    if (!value) return value;
+
+    // Idempotent normalization.
+    if (/^QF\d+$/.test(value)) return value;
+
+    // Qantas rosters use numeric flight numbers; normalize them.
+    if (/^\d+$/.test(value)) return `QF${value}`;
+
+    return value;
+  }
+
+  normalizeService(service) {
+    if (service === null || service === undefined) return service;
+
+    const raw = String(service).trim().toUpperCase();
+    if (!raw) return raw;
+
+    // Roster table sometimes prefixes passive flights with 'P' (e.g. P937).
+    const withoutPassivePrefix = raw.startsWith('P') ? raw.slice(1) : raw;
+
+    // Some entries can include multiple flight numbers (e.g. 123/456).
+    const segments = withoutPassivePrefix.split('/').filter(Boolean);
+    const normalizedSegments = segments.map(s => this.normalizeFlightNumber(s));
+    return normalizedSegments.join('/');
+  }
+
   /**
    * Parse a Qantas roster text file
    * @param {string} rosterText - The raw roster text content
@@ -233,6 +263,8 @@ class QantasRosterParser {
       const match = line.match(/^\s*(\d{1,2}[A-Za-z]{3})\s+(P\s+)?(\d{1,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\b/);
       if (!match) continue;
 
+      const flightNumber = this.normalizeFlightNumber(match[3]);
+
       const dayMonth = this.parseDayMonthToken(match[1]);
       if (!dayMonth) continue;
 
@@ -259,7 +291,7 @@ class QantasRosterParser {
         year: currentYear,
         month: currentMonth,
         day: dayMonth.day,
-        flightNumber: match[3],
+        flightNumber,
         passive: Boolean(match[2]),
         departPort: match[4],
         departTime: match[5],
@@ -271,7 +303,7 @@ class QantasRosterParser {
         year: currentYear,
         month: currentMonth,
         day: dayMonth.day,
-        flightNumber: match[3],
+        flightNumber,
         passive: Boolean(match[2]),
         departPort: match[4],
         departTime: match[5],
@@ -351,12 +383,13 @@ class QantasRosterParser {
     const serviceOnlyMatch = restOfLine.match(/^\s*(P?\d+(?:\/\d+)?)\s+(\d{4})\s+(\d{4})/);
     if (serviceOnlyMatch) {
       entry.dutyType = 'FLIGHT';
-      entry.service = serviceOnlyMatch[1];
+      const rawServiceToken = serviceOnlyMatch[1];
+      entry.service = this.normalizeService(rawServiceToken);
       entry.signOn = serviceOnlyMatch[2];
       entry.signOff = serviceOnlyMatch[3];
       
       // Check for passive flights (starting with P)
-      if (entry.service && entry.service.startsWith('P')) {
+      if (rawServiceToken && rawServiceToken.startsWith('P')) {
         entry.passive = true;
         entry.description = `Passive Flight ${entry.service}`;
       }
@@ -431,22 +464,26 @@ class QantasRosterParser {
       }
     } else {
       entry.dutyType = 'FLIGHT';
+
+      let rawServiceToken;
       
       // Parse service (could be flight number or multiple flights)
       const serviceMatch = restOfLine.match(/^\S+\s+(P?\d+(?:\/\d+)?)/);
       if (serviceMatch) {
-        entry.service = serviceMatch[1];
-        
-        // Check for passive flights (starting with P)
-        if (entry.service && entry.service.startsWith('P')) {
+        rawServiceToken = serviceMatch[1];
+
+        // Check for passive flights (starting with P) before normalization.
+        if (rawServiceToken.startsWith('P')) {
           entry.passive = true;
         }
+
+        entry.service = this.normalizeService(rawServiceToken);
       }
       
       // Parse times - look for 4-digit time patterns
       // Make sure we skip the service field by starting after it
-      const afterService = entry.service 
-        ? restOfLine.substring(restOfLine.indexOf(entry.service) + entry.service.length)
+      const afterService = rawServiceToken
+        ? restOfLine.substring(restOfLine.indexOf(rawServiceToken) + rawServiceToken.length)
         : restOfLine;
       
       const times = afterService.match(/\b(\d{4})\s+(\d{4})\b/);
