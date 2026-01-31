@@ -128,6 +128,13 @@ async function pollOnce(config, logger = console) {
     }
   });
 
+  // ImapFlow is an EventEmitter and can emit 'error'. If there is no listener,
+  // Node will treat it as an uncaught exception and can crash the process.
+  client.on('error', err => {
+    const msg = err && err.message ? err.message : String(err);
+    logger.warn(`[inbox] imap client error: ${msg}`);
+  });
+
   let lock;
   try {
     await client.connect();
@@ -271,31 +278,60 @@ function startInboxRosterPolling(env = process.env, logger = console) {
   let timer;
   let running = false;
   let stopped = false;
+  let consecutiveFailures = 0;
+
+  const maxBackoffMs = parseNumber(env.ROSTER_EMAIL_POLL_MAX_BACKOFF_MS, 10 * 60_000);
+
+  const computeNextDelayMs = () => {
+    const base = Math.max(1_000, config.intervalMs);
+    if (consecutiveFailures <= 0) return base;
+
+    const exp = Math.min(10, consecutiveFailures); // cap exponent to avoid overflow
+    const delay = Math.min(maxBackoffMs, base * Math.pow(2, exp));
+    const jitter = 0.15;
+    const factor = 1 - jitter + Math.random() * (2 * jitter);
+    return Math.max(1_000, Math.floor(delay * factor));
+  };
+
+  const scheduleNext = (delayMs) => {
+    if (stopped) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(tick, delayMs);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+  };
 
   const tick = async () => {
     if (stopped) return;
     if (running) return;
+
     running = true;
     try {
       const result = await pollOnce(config, logger);
+      consecutiveFailures = 0;
       logger.log(`[inbox] poll complete checked=${result.checked} processed=${result.processed}`);
     } catch (err) {
-      logger.warn(`[inbox] poll error: ${err && err.message}`);
+      consecutiveFailures++;
+      const code = err && err.code ? String(err.code) : '';
+      const msg = err && err.message ? err.message : String(err);
+      const delayMs = computeNextDelayMs();
+      logger.warn(`[inbox] poll error${code ? ` (${code})` : ''}: ${msg}; retrying in ${Math.round(delayMs / 1000)}s`);
+      scheduleNext(delayMs);
+      return;
     } finally {
       running = false;
     }
+
+    scheduleNext(computeNextDelayMs());
   };
 
-  // Initial tick quickly, then interval
-  tick();
-  timer = setInterval(tick, config.intervalMs);
-  if (timer && typeof timer.unref === 'function') timer.unref();
+  // Initial tick quickly, then self-scheduled with backoff support.
+  scheduleNext(0);
 
   return {
     config,
     stop: () => {
       stopped = true;
-      if (timer) clearInterval(timer);
+      if (timer) clearTimeout(timer);
     },
     pollOnce: () => pollOnce(config, logger)
   };
