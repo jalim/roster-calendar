@@ -7,7 +7,10 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "start": "node src/index.js",
-    "dev": "node src/index.js"
+    "dev": "node src/index.js",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "gitleaks:staged": "gitleaks protect --staged --redact --no-banner",
+    "gitleaks:all": "gitleaks detect --redact --no-banner"
   },
   "keywords": [],
   "author": "",

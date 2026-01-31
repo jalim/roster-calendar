@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit secret scan (gitleaks)
+#
+# - Blocks commits if gitleaks finds secrets/PII in staged changes.
+# - To bypass intentionally: SKIP_GITLEAKS=1 git commit ...
+
+if [[ "${SKIP_GITLEAKS:-}" == "1" ]]; then
+  echo "[gitleaks] SKIP_GITLEAKS=1 set; skipping scan."
+  exit 0
+fi
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  cat <<'EOF'
+[gitleaks] ERROR: gitleaks is not installed.
+
+Install it, then retry:
+  macOS (Homebrew): brew install gitleaks
+
+Temporary bypass (not recommended):
+  SKIP_GITLEAKS=1 git commit ...
+EOF
+  exit 1
+fi
+
+echo "[gitleaks] Scanning staged changes..."
+# --staged scans the index (what will be committed)
+# --redact avoids printing full secret values
+# --no-banner reduces noise
+exec gitleaks protect --staged --redact --no-banner

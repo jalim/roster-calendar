@@ -164,6 +164,28 @@ Run tests:
 npm test
 ```
 
+## Security / privacy
+
+This repo is intended to avoid committing personal roster exports, staff numbers, email addresses, or secrets.
+
+### Pre-commit secret scan (recommended)
+
+1) Install gitleaks:
+
+```bash
+brew install gitleaks
+```
+
+1) Enable the repo’s git hooks:
+
+```bash
+npm run hooks:install
+```
+
+Now every `git commit` will run `gitleaks` against staged changes.
+
+To bypass (not recommended): `SKIP_GITLEAKS=1 git commit ...`
+
 Run tests in watch mode:
 
 ```bash
