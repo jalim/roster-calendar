@@ -105,6 +105,42 @@ describe('ICSCalendarService', () => {
     expect(events.some(e => String(e.description || '').includes('Code:'))).toBe(false);
   });
 
+  test('should add DPC60 pay indication to flight duty descriptions', () => {
+    const descCreditWins = icsService.buildFlightDescription({
+      dutyType: 'FLIGHT',
+      dutyCode: 'TEST',
+      dutyHours: '10:00',
+      creditHours: '07:00'
+    });
+
+    expect(descCreditWins).toContain('Credit: 7:00 (DPC60 min 6:00)');
+
+    const descDpcWins = icsService.buildFlightDescription({
+      dutyType: 'FLIGHT',
+      dutyCode: 'TEST',
+      dutyHours: '10:00',
+      creditHours: '05:00'
+    });
+
+    expect(descDpcWins).toContain('Credit: 6:00 (DPC60 min 6:00)');
+  });
+
+  test('should add DPC60 pay indication to Pattern Details duty events', () => {
+    const parser = new QantasRosterParser();
+    const samplePath = path.join(__dirname, '../examples/sample-webcis-roster.txt');
+    const rosterText = fs.readFileSync(samplePath, 'utf-8');
+    const parsed = parser.parse(rosterText);
+
+    const events = icsService.convertRosterToEvents(parsed);
+    const dutyEvents = events.filter(e => e.title === 'Duty: 8130');
+    expect(dutyEvents.length).toBeGreaterThan(0);
+
+    dutyEvents.forEach(e => {
+      expect(String(e.description || '')).toContain('Credit:');
+      expect(String(e.description || '')).toContain('DPC60 min');
+    });
+  });
+
   test('should parse time correctly', () => {
     const time = icsService.parseTime('1650');
     expect(time).toEqual([16, 50]);

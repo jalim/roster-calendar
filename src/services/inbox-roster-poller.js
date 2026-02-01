@@ -136,6 +136,47 @@ async function pollOnce(config, logger = console) {
   });
 
   let lock;
+  const ensuredMailboxes = new Set();
+
+  const ensureMailboxExists = async (mailbox) => {
+    if (!mailbox || ensuredMailboxes.has(mailbox)) return;
+    try {
+      await client.mailboxCreate(mailbox);
+      logger.log(`[inbox] created mailbox: ${mailbox}`);
+    } catch (err) {
+      // If it already exists (or server refuses create), just log and continue.
+      const code = err && err.serverResponseCode ? String(err.serverResponseCode) : '';
+      const msg = err && err.message ? err.message : String(err);
+      logger.warn(`[inbox] mailboxCreate failed for ${mailbox}${code ? ` (${code})` : ''}: ${msg}`);
+    } finally {
+      ensuredMailboxes.add(mailbox);
+    }
+  };
+
+  const moveToProcessedIfConfigured = async (uid, mailbox) => {
+    if (!mailbox) return;
+    try {
+      await client.messageMove(uid, mailbox, { uid: true });
+    } catch (err) {
+      const serverCode = err && err.serverResponseCode ? String(err.serverResponseCode) : '';
+      // Dovecot commonly responds with TRYCREATE when the mailbox doesn't exist.
+      if (serverCode === 'TRYCREATE') {
+        await ensureMailboxExists(mailbox);
+        try {
+          await client.messageMove(uid, mailbox, { uid: true });
+          return;
+        } catch (retryErr) {
+          const msg = retryErr && retryErr.message ? retryErr.message : String(retryErr);
+          logger.warn(`[inbox] move failed uid=${uid} mailbox=${mailbox} after create: ${msg}`);
+          return;
+        }
+      }
+
+      const msg = err && err.message ? err.message : String(err);
+      logger.warn(`[inbox] move failed uid=${uid} mailbox=${mailbox}: ${msg}`);
+    }
+  };
+
   try {
     await client.connect();
     lock = await client.getMailboxLock(config.mailbox);
@@ -167,11 +208,7 @@ async function pollOnce(config, logger = console) {
 
         // Optionally move processed mail
         if (config.processedMailbox && result.processed) {
-          try {
-            await client.messageMove(uid, config.processedMailbox, { uid: true });
-          } catch (moveErr) {
-            logger.warn(`[inbox] move failed uid=${uid}: ${moveErr && moveErr.message}`);
-          }
+          await moveToProcessedIfConfigured(uid, config.processedMailbox);
         }
       } catch (msgErr) {
         logger.warn(`[inbox] error uid=${uid}: ${msgErr && msgErr.message}`);
