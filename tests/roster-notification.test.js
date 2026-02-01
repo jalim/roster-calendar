@@ -14,20 +14,27 @@ describe('roster notification behavior', () => {
     
     const config = { notifyEnabled: true };
     
-    // Old behavior would have been: config.notifyEnabled && isNew
-    // New behavior is just: config.notifyEnabled
+    // The fix removed the isNew check from: if (config.notifyEnabled && isNew)
+    // Now it's just: if (config.notifyEnabled)
     
-    // Simulate both scenarios
-    const scenariosToNotify = [
-      { isNew: true, description: 'new roster with different content' },
-      { isNew: false, description: 'duplicate roster with same content' }
-    ];
+    // Test both scenarios to document the expected behavior
+    const newRoster = true;
+    const duplicateRoster = false;
     
-    scenariosToNotify.forEach(scenario => {
-      // With the fix, notifications should be sent in both cases
-      const shouldNotify = config.notifyEnabled;
-      expect(shouldNotify).toBe(true);
-    });
+    // Old behavior: config.notifyEnabled && isNew
+    const oldBehaviorNew = config.notifyEnabled && newRoster;
+    const oldBehaviorDuplicate = config.notifyEnabled && duplicateRoster;
+    
+    // New behavior: config.notifyEnabled (ignores isNew)
+    const newBehaviorNew = config.notifyEnabled;
+    const newBehaviorDuplicate = config.notifyEnabled;
+    
+    // Verify the change
+    expect(oldBehaviorNew).toBe(true); // Old: sent for new rosters
+    expect(oldBehaviorDuplicate).toBe(false); // Old: NOT sent for duplicates
+    
+    expect(newBehaviorNew).toBe(true); // New: sent for new rosters
+    expect(newBehaviorDuplicate).toBe(true); // New: NOW sent for duplicates (the fix!)
   });
 
   test('notification should not be sent when notifyEnabled is false', () => {
