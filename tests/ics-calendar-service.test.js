@@ -113,7 +113,7 @@ describe('ICSCalendarService', () => {
       creditHours: '07:00'
     });
 
-    expect(descCreditWins).toContain('Credit: 7:00 (DPC60 min 6:00)');
+    expect(descCreditWins).toContain('Pay: 7:00 (credit; DPC60 min 6:00)');
 
     const descDpcWins = icsService.buildFlightDescription({
       dutyType: 'FLIGHT',
@@ -122,7 +122,24 @@ describe('ICSCalendarService', () => {
       creditHours: '05:00'
     });
 
-    expect(descDpcWins).toContain('Credit: 6:00 (DPC60 min 6:00)');
+    expect(descDpcWins).toContain('Pay: 6:00 (DPC60; roster credit 5:00)');
+  });
+
+  test('DPC60 minimum should be 60% of duty (08 Sun in provided roster)', () => {
+    const parser = new QantasRosterParser();
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/webCisRoster_174423_01022026.txt'),
+      'utf-8'
+    );
+    const parsed = parser.parse(text);
+
+    const entry = parsed.entries.find(e => e.day === 8 && e.dayOfWeek === 'Sun');
+    expect(entry).toBeDefined();
+    expect(entry.dutyHours).toBe('9:20');
+    expect(entry.creditHours).toBe('6:45');
+
+    const payLine = icsService.buildPayLine({ dutyHours: entry.dutyHours, creditHours: entry.creditHours });
+    expect(payLine).toBe('Pay: 6:45 (credit; DPC60 min 5:36)');
   });
 
   test('should add DPC60 pay indication to Pattern Details duty events', () => {
@@ -136,7 +153,7 @@ describe('ICSCalendarService', () => {
     expect(dutyEvents.length).toBeGreaterThan(0);
 
     dutyEvents.forEach(e => {
-      expect(String(e.description || '')).toContain('Credit:');
+      expect(String(e.description || '')).toContain('Pay:');
       expect(String(e.description || '')).toContain('DPC60 min');
     });
   });

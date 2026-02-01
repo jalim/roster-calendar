@@ -62,11 +62,18 @@ class ICSCalendarService {
 
     const paid = this.formatMinutesAsHMM(calc.paidMinutes);
     const min = this.formatMinutesAsHMM(calc.minMinutes);
+    const credit = this.formatMinutesAsHMM(calc.creditMinutes);
 
     // Keep this short and scannable in calendar clients.
-    // Example (DPC60 wins):  "Credit: 6:00 (DPC60 min 6:00)"
-    // Example (credit wins): "Credit: 7:14 (DPC60 min 5:00)"
-    return `Credit: ${paid} (DPC60 min ${min})`;
+    // Examples:
+    // - DPC60 wins:  "Pay: 6:00 (DPC60; roster credit 5:00)"
+    // - Credit wins: "Pay: 7:14 (credit; DPC60 min 5:00)"
+    if (calc.basis === 'DPC60') {
+      if (credit) return `Pay: ${paid} (DPC60; roster credit ${credit})`;
+      return `Pay: ${paid} (DPC60)`;
+    }
+
+    return `Pay: ${paid} (credit; DPC60 min ${min})`;
   }
 
   stableUidForEntry({ year, month, day, entry, employee }) {
