@@ -121,7 +121,7 @@ async function processMessage({ client, uid, config, logger = console }) {
   if (config.notifyEnabled) {
     try {
       notify = await notifyRosterChange(
-        { rosterId, rosterText, roster, previousRoster },
+        { rosterId, rosterText, roster, previousRoster, isNew },
         config._env || process.env,
         logger
       );
