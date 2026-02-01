@@ -26,14 +26,24 @@ function buildSubject({ roster }) {
   return bits.join(' ');
 }
 
-function buildBody({ rosterId, roster, previousRoster }) {
+function buildBody({ rosterId, roster, previousRoster, isNew }) {
   const employee = roster && roster.employee ? roster.employee : {};
   const name = employee.name ? safeString(employee.name).trim() : '';
   const staffNo = employee.staffNo ? safeString(employee.staffNo).trim() : '';
   const base = employee.base ? safeString(employee.base).trim() : '';
 
   const diff = previousRoster ? diffRosters(previousRoster, roster) : null;
-  const diffText = diff ? formatDiffAsText(diff) : 'First roster received (no previous roster on file).';
+  let diffText;
+  
+  if (!previousRoster) {
+    diffText = 'First roster received (no previous roster on file).';
+  } else if (isNew === false) {
+    // Duplicate roster - same content as before
+    diffText = 'Duplicate roster received (no changes from previous version).';
+  } else {
+    // New or updated roster
+    diffText = diff ? formatDiffAsText(diff) : 'No duty changes detected.';
+  }
 
   const lines = [];
   lines.push('Roster Calendar Service');
@@ -49,7 +59,7 @@ function buildBody({ rosterId, roster, previousRoster }) {
   return lines.join('\n');
 }
 
-async function notifyRosterChange({ rosterId, rosterText, roster, previousRoster }, env = process.env, logger = console) {
+async function notifyRosterChange({ rosterId, rosterText, roster, previousRoster, isNew }, env = process.env, logger = console) {
   const staffNo = roster && roster.employee && roster.employee.staffNo ? safeString(roster.employee.staffNo).trim() : '';
   if (!staffNo) {
     return { notified: false, reason: 'missing-staffNo' };
@@ -61,7 +71,7 @@ async function notifyRosterChange({ rosterId, rosterText, roster, previousRoster
   }
 
   const subject = buildSubject({ roster });
-  const text = buildBody({ rosterId, roster, previousRoster });
+  const text = buildBody({ rosterId, roster, previousRoster, isNew });
 
   const attachmentName = buildFilename({ rosterId, roster });
 

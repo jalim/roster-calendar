@@ -19,7 +19,8 @@ describe('roster-store', () => {
     const second = rosterStore.ingestRosterText(rosterText);
     expect(second.rosterId).toEqual(first.rosterId);
     expect(second.isNew).toBe(false);
-    expect(second.previousRoster).toBeNull();
+    expect(second.previousRoster).toBeDefined(); // Now returns previous roster for duplicates
+    expect(second.previousRoster).toEqual(first.roster); // Should be the same roster
 
     const bucket = rosterStore.getRosterBucket(first.rosterId);
     expect(bucket).toBeDefined();

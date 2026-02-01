@@ -118,10 +118,10 @@ async function processMessage({ client, uid, config, logger = console }) {
   const { rosterId, roster, isNew, previousRoster } = rosterStore.ingestRosterText(rosterText);
 
   let notify = null;
-  if (config.notifyEnabled && isNew) {
+  if (config.notifyEnabled) {
     try {
       notify = await notifyRosterChange(
-        { rosterId, rosterText, roster, previousRoster },
+        { rosterId, rosterText, roster, previousRoster, isNew },
         config._env || process.env,
         logger
       );

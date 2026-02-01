@@ -182,7 +182,10 @@ function ingestRosterText(rosterText) {
   }
 
   if (existing.rosterHashes.has(rosterHash)) {
-    return { rosterId, roster, isNew: false, previousRoster: null };
+    // Duplicate roster - return the latest stored roster as previousRoster
+    // so the email can show "No duty changes detected" instead of "First roster received"
+    const previousRoster = existing.rosters.length > 0 ? existing.rosters[existing.rosters.length - 1] : null;
+    return { rosterId, roster, isNew: false, previousRoster };
   }
 
   existing.employee = roster.employee || existing.employee;
