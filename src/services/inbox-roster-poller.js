@@ -1,6 +1,7 @@
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const rosterStore = require('./roster-store');
+const { serializeError } = require('./logger');
 
 function parseBoolean(value, defaultValue = false) {
   if (value === undefined || value === null || value === '') return defaultValue;
@@ -91,8 +92,17 @@ function shouldProcessEmail(parsed, { fromAllowlist, subjectContains }) {
 }
 
 async function processMessage({ client, uid, config }) {
-  const download = await client.download(uid, undefined, { uid: true });
-  const parsed = await simpleParser(download.content);
+  // Prefer fetchOne({ source: true }) for full message source.
+  // Passing an undefined part into client.download can throw "Input cannot be null or undefined" on some servers.
+  const fetched = await client.fetchOne(uid, { source: true }, { uid: true });
+  const source = fetched && fetched.source;
+  if (!source) {
+    const err = new Error('IMAP fetch returned no message source');
+    err.code = 'IMAP_NO_SOURCE';
+    throw err;
+  }
+
+  const parsed = await simpleParser(source);
   const meta = summarizeParsedEmail(parsed);
 
   if (!shouldProcessEmail(parsed, config)) {
@@ -211,8 +221,19 @@ async function pollOnce(config, logger = console) {
           await moveToProcessedIfConfigured(uid, config.processedMailbox);
         }
       } catch (msgErr) {
-        logger.warn(`[inbox] error uid=${uid}: ${msgErr && msgErr.message}`);
-        results.push({ uid, processed: false, reason: 'error', error: msgErr && msgErr.message ? msgErr.message : 'Unknown error' });
+        const message = msgErr && msgErr.message ? msgErr.message : String(msgErr);
+        logger.warn('[inbox] message processing error', {
+          uid,
+          mailbox: config.mailbox,
+          error: serializeError(msgErr)
+        });
+
+        results.push({
+          uid,
+          processed: false,
+          reason: 'error',
+          error: message
+        });
         try {
           await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
         } catch (_) {

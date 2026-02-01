@@ -196,6 +196,20 @@ npm run test:watch
 
 See [docs/deploy-proxmox-lxc-cloudflare-tunnel.md](docs/deploy-proxmox-lxc-cloudflare-tunnel.md) for a step-by-step guide to running this service long-term in a Proxmox LXC container and exposing it via a Cloudflare Tunnel.
 
+## Logging / troubleshooting
+
+Logs go to stdout/stderr and are captured by `systemd`/`journald` when running as a service.
+
+Optional env vars:
+
+```text
+# Log verbosity: debug | info | warn | error
+ROSTER_LOG_LEVEL=info
+
+# If true, logs one line per HTTP request (can be noisy)
+ROSTER_HTTP_LOGGING=false
+```
+
 ## Email Integration
 
 The service can ingest rosters from email in two ways:

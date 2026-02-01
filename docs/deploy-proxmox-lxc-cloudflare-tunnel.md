@@ -284,6 +284,23 @@ journalctl -u roster-calendar -n 200 --no-pager
 journalctl -u cloudflared -n 200 --no-pager
 ```
 
+For more detail while diagnosing unexpected exits:
+
+```sh
+# Follow logs live
+journalctl -u roster-calendar -f
+
+# Include current boot only
+journalctl -u roster-calendar -b --no-pager
+```
+
+You can also temporarily increase log verbosity by setting in `/opt/roster-calendar/.env`:
+
+```text
+ROSTER_LOG_LEVEL=debug
+ROSTER_HTTP_LOGGING=true
+```
+
 ### Persistence / backups
 
 If you enable persistence (`ROSTER_PERSIST_ENABLED=true`), the file at:
