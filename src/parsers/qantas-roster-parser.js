@@ -521,7 +521,7 @@ class QantasRosterParser {
       if (codeMatch) {
         entry.code = codeMatch[1];
       }
-    } else if (entry.dutyCode === 'AL') {
+    } else if (entry.dutyCode === 'AL' || entry.dutyCode === 'LA') {
       entry.dutyType = 'ANNUAL_LEAVE';
       entry.description = 'Annual Leave';
       const codeMatch = restOfLine.match(/\s+([A-Z0-9]+)\s*$/);
