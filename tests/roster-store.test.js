@@ -14,10 +14,12 @@ describe('roster-store', () => {
     expect(first).toBeDefined();
     expect(first.rosterId).toBeTruthy();
     expect(first.isNew).toBe(true);
+    expect(first.previousRoster).toBeNull();
 
     const second = rosterStore.ingestRosterText(rosterText);
     expect(second.rosterId).toEqual(first.rosterId);
     expect(second.isNew).toBe(false);
+    expect(second.previousRoster).toBeNull();
 
     const bucket = rosterStore.getRosterBucket(first.rosterId);
     expect(bucket).toBeDefined();
@@ -50,6 +52,11 @@ describe('roster-store', () => {
     expect(second.isNew).toBe(true);
     expect(second.updated).toBe(true);
     expect(second.rosterId).toEqual(first.rosterId);
+    expect(second.previousRoster).toBeDefined();
+
+    // Previous roster should still have the old flight number.
+    const prevFirstEntry = second.previousRoster.entries[0];
+    expect(prevFirstEntry.service).toContain('QF950');
 
     const bucket = rosterStore.getRosterBucket(first.rosterId);
     expect(bucket).toBeDefined();

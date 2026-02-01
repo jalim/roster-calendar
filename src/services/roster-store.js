@@ -178,11 +178,11 @@ function ingestRosterText(rosterText) {
       rosterHashes: new Set([rosterHash])
     });
     persistNow(process.env);
-    return { rosterId, roster, isNew: true };
+    return { rosterId, roster, isNew: true, previousRoster: null };
   }
 
   if (existing.rosterHashes.has(rosterHash)) {
-    return { rosterId, roster, isNew: false };
+    return { rosterId, roster, isNew: false, previousRoster: null };
   }
 
   existing.employee = roster.employee || existing.employee;
@@ -196,17 +196,19 @@ function ingestRosterText(rosterText) {
     });
 
     if (idx >= 0) {
+      const previousRoster = existing.rosters[idx];
       existing.rosters[idx] = roster;
       existing.rosterHashes.add(rosterHash);
       persistNow(process.env);
-      return { rosterId, roster, isNew: true, updated: true };
+      return { rosterId, roster, isNew: true, updated: true, previousRoster };
     }
   }
 
+  const previousRoster = existing.rosters.length > 0 ? existing.rosters[existing.rosters.length - 1] : null;
   existing.rosters.push(roster);
   existing.rosterHashes.add(rosterHash);
   persistNow(process.env);
-  return { rosterId, roster, isNew: true };
+  return { rosterId, roster, isNew: true, previousRoster };
 }
 
 function getRosterBucket(rosterId) {

@@ -23,7 +23,8 @@
     "imapflow": "^1.0.195",
     "luxon": "^3.7.2",
     "mailparser": "^3.7.4",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "nodemailer": "^6.10.1"
   },
   "devDependencies": {
     "jest": "^30.2.0"

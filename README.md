@@ -258,6 +258,46 @@ Behavior:
 - Parses/ingests the roster into the same in-memory store used by the HTTP API
 - Marks the message as **Seen** and (optionally) moves it to `ROSTER_EMAIL_PROCESSED_MAILBOX`
 
+### Outbound notifications (roster change email)
+
+When enabled, the IMAP poller can send an email to the pilot with:
+
+- the received roster text file attached
+- a simple per-day change summary versus the previously stored roster for that staff number
+
+Configuration:
+
+```text
+# Enable notifications
+ROSTER_NOTIFY_ENABLED=true
+
+# StaffNo -> email mapping DB (stored locally; ignored by git via /data/)
+ROSTER_PILOT_EMAIL_DB_PATH=./data/pilot-email-map.json
+
+# SMTP settings
+ROSTER_SMTP_HOST=smtp.yourmailhost.com
+ROSTER_SMTP_PORT=587
+ROSTER_SMTP_SECURE=false
+ROSTER_SMTP_USER=roster@example.com
+ROSTER_SMTP_PASS=your-smtp-password
+ROSTER_EMAIL_FROM=roster@example.com
+
+# Safe testing
+ROSTER_NOTIFY_DRY_RUN=true
+```
+
+To manage the staffNo → email mapping without editing files, you can enable debug endpoints:
+
+```text
+ROSTER_DEBUG_ENDPOINTS=true
+```
+
+Then:
+
+- `GET /api/roster/_debug/pilot-emails`
+- `PUT /api/roster/_debug/pilot-emails/:staffNo` with JSON body `{ "email": "pilot@example.com" }`
+- `DELETE /api/roster/_debug/pilot-emails/:staffNo`
+
 ## Project Structure
 
 ```text

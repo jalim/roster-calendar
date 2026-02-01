@@ -1,6 +1,7 @@
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const rosterStore = require('./roster-store');
+const { notifyRosterChange } = require('./roster-change-notifier');
 const { serializeError } = require('./logger');
 
 function parseBoolean(value, defaultValue = false) {
@@ -91,7 +92,7 @@ function shouldProcessEmail(parsed, { fromAllowlist, subjectContains }) {
   return true;
 }
 
-async function processMessage({ client, uid, config }) {
+async function processMessage({ client, uid, config, logger = console }) {
   // Prefer fetchOne({ source: true }) for full message source.
   // Passing an undefined part into client.download can throw "Input cannot be null or undefined" on some servers.
   const fetched = await client.fetchOne(uid, { source: true }, { uid: true });
@@ -114,7 +115,22 @@ async function processMessage({ client, uid, config }) {
     return { processed: false, reason: 'no-roster-text', ...meta };
   }
 
-  const { rosterId, roster, isNew } = rosterStore.ingestRosterText(rosterText);
+  const { rosterId, roster, isNew, previousRoster } = rosterStore.ingestRosterText(rosterText);
+
+  let notify = null;
+  if (config.notifyEnabled && isNew) {
+    try {
+      notify = await notifyRosterChange(
+        { rosterId, rosterText, roster, previousRoster },
+        config._env || process.env,
+        logger
+      );
+    } catch (notifyErr) {
+      const msg = notifyErr && notifyErr.message ? notifyErr.message : String(notifyErr);
+      logger.warn(`[notify] failed to send roster email: ${msg}`);
+      notify = { notified: false, reason: 'error', error: msg };
+    }
+  }
 
   return {
     processed: true,
@@ -122,7 +138,8 @@ async function processMessage({ client, uid, config }) {
     rosterId,
     employee: roster.employee,
     entriesCount: Array.isArray(roster.entries) ? roster.entries.length : 0,
-    isNew
+    isNew,
+    notify
   };
 }
 
@@ -203,7 +220,7 @@ async function pollOnce(config, logger = console) {
     const results = [];
     for (const uid of uids) {
       try {
-        const result = await processMessage({ client, uid, config });
+        const result = await processMessage({ client, uid, config, logger });
         results.push({ uid, ...result });
 
         if (result.processed) {
@@ -282,6 +299,7 @@ function loadInboxConfig(env = process.env) {
     : (!secure && port === 143 ? true : undefined);
 
   return {
+    _env: env,
     enabled: parseBoolean(env.ROSTER_EMAIL_POLLING_ENABLED, false),
     host: env.ROSTER_EMAIL_IMAP_HOST,
     port,
@@ -294,7 +312,8 @@ function loadInboxConfig(env = process.env) {
     intervalMs: parseNumber(env.ROSTER_EMAIL_POLL_INTERVAL_MS, 60_000),
     searchMode: normalizeSearchMode(env.ROSTER_EMAIL_IMAP_SEARCH),
     fromAllowlist: normalizeAllowlist(env.ROSTER_EMAIL_FROM_ALLOWLIST),
-    subjectContains: env.ROSTER_EMAIL_SUBJECT_CONTAINS || ''
+    subjectContains: env.ROSTER_EMAIL_SUBJECT_CONTAINS || '',
+    notifyEnabled: parseBoolean(env.ROSTER_NOTIFY_ENABLED, false)
   };
 }
 
