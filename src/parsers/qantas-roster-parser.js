@@ -495,8 +495,8 @@ class QantasRosterParser {
         entry.code = codeMatch[1];
       }
     } else if (entry.dutyCode === 'PLN') {
-      entry.dutyType = 'PLANNING';
-      entry.description = 'Planning Day';
+      entry.dutyType = 'PERSONAL_LEAVE';
+      entry.description = 'Personal Leave';
       const codeMatch = restOfLine.match(/\s+([A-Z0-9]+)\s*$/);
       if (codeMatch) {
         entry.code = codeMatch[1];

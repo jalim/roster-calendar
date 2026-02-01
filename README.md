@@ -135,7 +135,7 @@ Date    Duty(Role)  Service                     S-On S-Of Duty  Credit Port Code
 
 - **D/O**: Day Off (not included in calendar)
 - **Flight Duties**: Regular flight assignments
-- **PLN**: Planning day
+- **PLN**: Personal leave
 - **R4/R5**: Reserve duty
 - **AV**: Annual leave
 - **P[flight]**: Passive/positioning flight

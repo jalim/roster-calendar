@@ -81,9 +81,9 @@ describe('QantasRosterParser', () => {
     expect(reserveEntry.dutyCode).toMatch(/^R\d+$/);
   });
 
-  test('should identify planning days', () => {
+  test('should identify personal leave days', () => {
     const roster = parser.parse(sampleRosterText);
-    const planningEntries = roster.entries.filter(e => e.dutyType === 'PLANNING');
+    const planningEntries = roster.entries.filter(e => e.dutyType === 'PERSONAL_LEAVE');
 
     expect(planningEntries.length).toBeGreaterThan(0);
     expect(planningEntries[0].dutyCode).toBe('PLN');

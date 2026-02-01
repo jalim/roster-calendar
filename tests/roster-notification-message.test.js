@@ -55,7 +55,7 @@ describe('roster notification messages', () => {
     };
     const roster = { 
       entries: [
-        { date: '14 Mon', day: 14, dayOfWeek: 'Mon', dutyCode: 'PLN', dutyType: 'PLANNING' }
+        { date: '14 Mon', day: 14, dayOfWeek: 'Mon', dutyCode: 'PLN', dutyType: 'PERSONAL_LEAVE' }
       ] 
     };
     

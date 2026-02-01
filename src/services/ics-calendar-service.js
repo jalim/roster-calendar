@@ -696,9 +696,9 @@ class ICSCalendarService {
         endTime = this.parseTime(entry.signOff);
         break;
 
-      case 'PLANNING':
-        title = 'Planning Day';
-        description = 'Planning day';
+      case 'PERSONAL_LEAVE':
+        title = 'Personal Leave';
+        description = 'Personal leave';
         startTime = [9, 0]; // Default to 9 AM
         duration = { hours: 8 };
         break;

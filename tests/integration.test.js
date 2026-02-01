@@ -77,9 +77,9 @@ describe('Roster to ICS Integration', () => {
     const roster = parser.parse(sampleRosterText);
     const events = icsService.convertRosterToEvents(roster);
     
-    // Find planning day events (no port specified)
+    // Find personal leave events (no port specified)
     const planningEvents = events.filter(e => 
-      e.title && e.title.includes('Planning')
+      e.title && e.title.includes('Personal Leave')
     );
     
     expect(planningEvents.length).toBeGreaterThan(0);
