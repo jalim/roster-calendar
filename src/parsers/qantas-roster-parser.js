@@ -4,6 +4,55 @@
  */
 
 class QantasRosterParser {
+  compareYMD(a, b) {
+    if (!a && !b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    if (a.year !== b.year) return a.year - b.year;
+    if (a.month !== b.month) return a.month - b.month;
+    return a.day - b.day;
+  }
+
+  inferPeriodStartFromDatedLegs(roster) {
+    const candidates = [];
+
+    const flights = roster && Array.isArray(roster.flights) ? roster.flights : [];
+    for (const f of flights) {
+      if (!f) continue;
+      if (!Number.isFinite(f.year) || !Number.isFinite(f.month) || !Number.isFinite(f.day)) continue;
+      candidates.push({ year: f.year, month: f.month, day: f.day });
+    }
+
+    const patterns = roster && Array.isArray(roster.dutyPatterns) ? roster.dutyPatterns : [];
+    for (const p of patterns) {
+      const legs = p && Array.isArray(p.legs) ? p.legs : [];
+      for (const leg of legs) {
+        if (!leg) continue;
+        if (!Number.isFinite(leg.year) || !Number.isFinite(leg.month) || !Number.isFinite(leg.day)) continue;
+        candidates.push({ year: leg.year, month: leg.month, day: leg.day });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => this.compareYMD(a, b));
+    const anchor = candidates[0];
+
+    const entries = roster && Array.isArray(roster.entries) ? roster.entries : [];
+    const firstEntry = entries.length > 0 ? entries[0] : null;
+    const firstEntryDay = firstEntry && Number.isFinite(firstEntry.day) ? firstEntry.day : null;
+
+    // Heuristic: if the first roster-table day-of-month is greater than the earliest dated leg day,
+    // the roster likely starts in the previous month (e.g. starts 28Jan, earliest flight is 02Feb).
+    let startMonth = anchor.month;
+    let startYear = anchor.year;
+    if (Number.isFinite(firstEntryDay) && firstEntryDay > anchor.day) {
+      startMonth = (startMonth + 11) % 12;
+      if (startMonth === 11) startYear -= 1;
+    }
+
+    return { month: startMonth, year: startYear };
+  }
+
   normalizeFlightNumber(flightNumber) {
     if (flightNumber === null || flightNumber === undefined) return flightNumber;
 
@@ -552,6 +601,9 @@ class QantasRosterParser {
       };
     }
 
+    const inferred = this.inferPeriodStartFromDatedLegs(roster);
+    if (inferred) return inferred;
+
     const now = new Date();
     return { month: now.getMonth(), year: now.getFullYear() };
   }
@@ -583,6 +635,30 @@ class QantasRosterParser {
         const firstDay = roster.entries[0].day;
         const lastDay = roster.entries[roster.entries.length - 1].day;
         if (lastDay < firstDay) {
+          endMonth = (startMonth + 1) % 12;
+          if (endMonth === 0) endYear = startYear + 1;
+        }
+      }
+
+      return { startMonth, startYear, endMonth, endYear };
+    }
+
+    // If the roster header doesn't include an explicit period start/end, prefer inferring
+    // the month/year from Pattern Details (dated flight legs) over using the current month.
+    // This avoids mis-applying rosters when they are ingested in a different month.
+    const inferred = this.inferPeriodStartFromDatedLegs(roster);
+    if (inferred) {
+      const startMonth = inferred.month;
+      const startYear = inferred.year;
+
+      let endMonth = startMonth;
+      let endYear = startYear;
+
+      const entries = roster && Array.isArray(roster.entries) ? roster.entries : [];
+      if (entries.length > 0) {
+        const firstDay = entries[0].day;
+        const lastDay = entries[entries.length - 1].day;
+        if (Number.isFinite(firstDay) && Number.isFinite(lastDay) && lastDay < firstDay) {
           endMonth = (startMonth + 1) % 12;
           if (endMonth === 0) endYear = startYear + 1;
         }

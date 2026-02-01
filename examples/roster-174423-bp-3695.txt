@@ -1,0 +1,135 @@
+
+                          QANTAS AIRWAYS LIMITED                    01Feb26 1904
+                     SH Flight Crew Roster - Bid Period 3695
+
+
+     Name    :  MULLAN LR                                    Category:  F/O-B737
+     Staff No:  174423                                       Base    :  PER
+     Snrty No:    2248                                       Line    :  PLH
+     Mailbox :       0                                       WorkRule:  QFSH
+                                                             PSN     :  20    
+
+
+Date    Duty(Role)  Service                     S-On S-Of Duty  Credit Port Code
+
+--------------------------------------------------------------------------------
+14 Mon  D/O                                                                 HPX
+15 Tue  8026A4      940                         1650 0012  5:22  4:20  BNE  AW01
+16 Wed              P937                        1250 1703  6:13  2:45       
+17 Thu  PLN                                                                 AS02
+18 Fri  PLN                                                                 AS02
+--------------------------------------------------------------------------------
+19 Sat  D/O                                                                 AW01
+20 Sun  D/O                                                                 AW01
+--------------------------------------------------------------------------------
+21 Mon  8075A1      936/545                     0930 1959  8:29  5:55  SYD  AW01
+22 Tue              651                         1445 1920  6:35  5:00       
+23 Wed  8101A1      652                         1525 2219  4:54  4:05  SYD  AW01
+24 Thu              653                         1735 2214  6:39  5:00       
+25 Fri  D/O                                                                 AW01
+--------------------------------------------------------------------------------
+26 Sat  D/O                                                                 AW01
+27 Sun  D/O                                                                 AW01
+--------------------------------------------------------------------------------
+28 Mon  R5                                      0501 1700 11:59             AW01
+29 Tue  8148A1      1086/1087                   0425 0934  5:09  3:40       AW01
+30 Wed  R5                                      0501 1700 11:59             AW01
+31 Thu  R4                                      0400 1600 12:00             AW01
+01 Fri  D/O                                                                 AW01
+--------------------------------------------------------------------------------
+02 Sat  D/O                                                                 AW01
+03 Sun  D/O                                                                 AW01
+--------------------------------------------------------------------------------
+04 Mon  AV                                                                  AW01
+05 Tue  8226A4      848                         0750 1433  5:13  3:30  DRW  AW01
+06 Wed              113                         1355 1828  6:03  4:50  SIN  
+08 Fri              114                         1820 0216  6:26  4:50  DRW  
+--------------------------------------------------------------------------------
+09 Sat              P1743                       1410 1713  4:33  1:58       
+10 Sun  D/O                                                                 AW01
+
+Global Preferences                       : None
+Total Duty Hours (Total TAFB)            : 101:34 (235:22)
+Total Passive Credit Hours               : 0:00 
+Total Credit Hours                       : 66:50 
+Total Duty Hours Carried In (Out)        : 0:00 (  0:00)
+Total Credit Hours Carried In (Out)      : 0:00 (  0:00)
+Available Date/Time this (next) BP       : 14Jul25 0000 (11Aug25 0000)
+Balance of 11 Hour Buffer this (next) BP : 0:00 (  0:00)
+Consecutive Duty Days Last BP            : 0  
+
+ARMS crew              AIRCREW RESOURCE MANAGEMENT SYSTEM           01Feb26 1904
+rosterPatns                     Pattern Details               Page:    1 of    2
+
+
+(L - time)                                       1-F/O                          
+                                                                                
+ Date    Flight    Depart    Arrive    Eq    Blk   Grnd    Blk  Duty   Cred     
+15Jul       940  PER  1745 BNE  2357  73H   4:12  13:18          ( 1            
+                 Rpt  1650 Rls  0012        BNE   12:38   4:12  5:22   4:20     
+                                                                                
+16Jul P     937  BNE  1315 PER  1648  73H   0:00                 ( 1            
+                 Rpt  1250 Rls  1703                      0:00  6:13   2:45     
+             TAFB    24:13      Rest   12:00     Total    4:12 11:35   7:05     
+Reason: AC   NOW PAX QF934 DUE 941 CXLD                                         
+                                                         8026A4 DATED 15Jul25   
+
+(L - time)                                       1-CPT   1-F/O                  
+                                                                                
+ Date    Flight    Depart    Arrive    Eq    Blk   Grnd    Blk  Duty   Cred     
+21Jul       936  PER  1035 BNE  1646  73H   4:11   1:29          ( 1            
+21Jul       545  BNE  1815 SYD  1944  73H   1:29  20:04          ( 2            
+                 Rpt  0930 Rls  1959        SYD   18:46   5:40  8:29   5:55     
+                                                                                
+22Jul       651  SYD  1548 PER  1905  73H   5:17                 ( 1            
+                 Rpt  1445 Rls  1920                      5:17  6:35   5:00     
+             TAFB    33:50      Rest   12:00     Total   10:57 15:04  10:55     
+Reason: AC                                                                      
+                                                         8075A1 DATED 21Jul25   
+
+(L - time)                                       1-CPT   1-F/O                  
+                                                                                
+ Date    Flight    Depart    Arrive    Eq    Blk   Grnd    Blk  Duty   Cred     
+23Jul       652  PER  1619 SYD  2204  73H   3:45  21:08          ( 1            
+                 Rpt  1525 Rls  2219        SYD   19:16   3:45  4:54   4:05     
+                                                                                
+24Jul       653  SYD  1912 PER  2159  73H   4:47                 ( 1            
+                 Rpt  1735 Rls  2214                      4:47  6:39   5:00     
+             TAFB    30:49      Rest   12:00     Total    8:32 11:33   9:05     
+Reason: AC                                                                      
+                                                         8101A1 DATED 23Jul25   
+
+(L - time)                                       1-CPT   1-F/O                  
+                                                                                
+ Date    Flight    Depart    Arrive    Eq    Blk   Grnd    Blk  Duty   Cred     
+29Jul      1086  PER  0520 ZNE  0656  73H   1:36   0:44          ( 1            
+29Jul      1087  ZNE  0740 PER  0919  73H   1:39                 ( 2            
+                 Rpt  0425 Rls  0934                      3:15  5:09   3:40     
+             TAFB     5:09      Rest   12:00     Total    3:15  5:09   3:40     
+Reason: AC                                                                      
+                                                         8148A1 DATED 29Jul25   
+
+ARMS crew              AIRCREW RESOURCE MANAGEMENT SYSTEM           01Feb26 1904
+rosterPatns                     Pattern Details               Page:    2 of    2
+
+
+(L - time)                                       1-F/O                          
+                                                                                
+ Date    Flight    Depart    Arrive    Eq    Blk   Grnd    Blk  Duty   Cred     
+05Aug       848  PER  0922 DRW  1418  73H   3:26  24:36          ( 1            
+                 Rpt  0750 Rls  1433        DRW   23:22   3:26  5:13   3:30     
+                                                                                
+06Aug       113  DRW  1454 SIN  1758  73H   4:34  49:42          ( 1            
+                 Rpt  1355 Rls  1828        SIN   47:52   4:34  6:03   4:50     
+                                                                                
+08Aug       114  SIN  1940 DRW  0146  73H   4:36  12:52          ( 1            
+                 Rpt  1820 Rls  0216        DRW   11:54   4:36  6:26   4:50     
+                                                                                
+09Aug P    1743  DRW  1438 PER  1658  320   0:00                 ( 1            
+                 Rpt  1410 Rls  1713                      0:00  4:33   1:58     
+             TAFB   105:23      Rest   15:00     Total   12:36 22:15  26:15     
+Reason: AC   1355 s/on 06aug for international                                  
+               thank you                                                        
+                                                         8226A4 DATED 05Aug25   
+
+                             *** End of Report ***

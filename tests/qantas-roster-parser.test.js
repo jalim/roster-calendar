@@ -149,4 +149,43 @@ describe('QantasRosterParser', () => {
     expect(parser.normalizeService('P940')).toBe('QF940');
     expect(parser.normalizeService('940/941')).toBe('QF940/QF941');
   });
+
+  test('should anchor BP 3695 to July 2025 period start when available', () => {
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/roster-174423-bp-3695.txt'),
+      'utf-8'
+    );
+    const roster = parser.parse(text);
+
+    expect(roster.summary).toBeDefined();
+    expect(roster.summary.bidPeriod).toBe('3695');
+    expect(roster.summary.periodStart).toEqual({ year: 2025, month: 6, day: 14 });
+    expect(roster.summary.periodEnd).toEqual({ year: 2025, month: 7, day: 11 });
+
+    const period = parser.getRosterPeriod(roster);
+    expect(period).toEqual({ startMonth: 6, startYear: 2025, endMonth: 7, endYear: 2025 });
+  });
+
+  test('should infer period start from Pattern Details when header period line is missing (BP 3695)', () => {
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/roster-174423-bp-3695.txt'),
+      'utf-8'
+    );
+
+    // Simulate rosters that omit the "Available Date/Time this (next) BP" line.
+    const withoutPeriodLine = text
+      .split(/\r?\n/)
+      .filter(l => !(l.includes('Available Date/Time this') && l.includes('BP')))
+      .join('\n');
+
+    const roster = parser.parse(withoutPeriodLine);
+    expect(roster.summary).toBeDefined();
+    expect(roster.summary.periodStart).toBeUndefined();
+
+    // Even without the header period line, Pattern Details includes DATED tokens (e.g. 15Jul25)
+    // so we should infer the correct month/year rather than defaulting to "now".
+    const period = parser.getRosterPeriod(roster);
+    expect(period.startMonth).toBe(6); // July
+    expect(period.startYear).toBe(2025);
+  });
 });
