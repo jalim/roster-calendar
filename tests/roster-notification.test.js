@@ -44,4 +44,38 @@ describe('roster notification behavior', () => {
     const shouldNotify = config.notifyEnabled;
     expect(shouldNotify).toBe(false);
   });
+
+  test('notification message should distinguish between new bid periods and updates', () => {
+    const { buildBody } = require('../src/services/roster-change-notifier');
+    
+    // Mock rosters
+    const roster = {
+      employee: { name: 'TEST PILOT', staffNo: '123456', base: 'PER' },
+      summary: { bidPeriod: '3691' },
+      entries: []
+    };
+
+    // Test 1: New bid period (no previous roster)
+    const bodyNewBidPeriod = buildBody({
+      rosterId: '123456',
+      roster,
+      previousRoster: null,
+      isNew: true
+    });
+    
+    expect(bodyNewBidPeriod).toContain('New bid period roster received (BP 3691)');
+    expect(bodyNewBidPeriod).not.toContain('First roster received');
+
+    // Test 2: First-ever roster (no bid period)
+    const rosterNoBidPeriod = { ...roster, summary: {} };
+    const bodyFirstEver = buildBody({
+      rosterId: '123456',
+      roster: rosterNoBidPeriod,
+      previousRoster: null,
+      isNew: true
+    });
+    
+    expect(bodyFirstEver).toContain('First roster received (no previous roster on file)');
+    expect(bodyFirstEver).not.toContain('New bid period');
+  });
 });

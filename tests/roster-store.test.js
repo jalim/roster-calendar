@@ -73,4 +73,110 @@ describe('roster-store', () => {
     expect(icsData).toContain('QF951');
     expect(icsData).not.toContain('QF950');
   });
+
+  test('ingestRosterText does not compare different bid periods', () => {
+    jest.resetModules();
+    const rosterStore = require('../src/services/roster-store');
+    const fs = require('fs');
+    const path = require('path');
+
+    // First, ingest BP-3691 roster
+    const bp3691Text = fs.readFileSync(
+      path.join(__dirname, '../examples/roster-174423-bp-3691.txt'),
+      'utf8'
+    );
+
+    const first = rosterStore.ingestRosterText(bp3691Text);
+    expect(first.isNew).toBe(true);
+    expect(first.previousRoster).toBeNull();
+    expect(first.roster.summary.bidPeriod).toBe('3691');
+
+    // Then ingest BP-3695 roster (different bid period)
+    const bp3695Text = fs.readFileSync(
+      path.join(__dirname, '../examples/roster-174423-bp-3695.txt'),
+      'utf8'
+    );
+
+    const second = rosterStore.ingestRosterText(bp3695Text);
+    expect(second.isNew).toBe(true);
+    // The key fix: previousRoster should be null because this is a different bid period
+    expect(second.previousRoster).toBeNull();
+    expect(second.roster.summary.bidPeriod).toBe('3695');
+    expect(second.rosterId).toEqual(first.rosterId); // Same employee
+
+    const bucket = rosterStore.getRosterBucket(first.rosterId);
+    expect(bucket).toBeDefined();
+    // Both rosters should be stored
+    expect(bucket.rosters.length).toBe(2);
+  });
+
+  test('ingestRosterText compares updates within the SAME bid period only', () => {
+    jest.resetModules();
+    const rosterStore = require('../src/services/roster-store');
+    const fs = require('fs');
+    const path = require('path');
+
+    // Scenario: BP 3965 arrives, then BP 3970 arrives, then an UPDATED BP 3965 arrives
+    
+    // 1. First BP 3965
+    const bp3965v1Text = fs.readFileSync(
+      path.join(__dirname, '../examples/roster-174423-bp-3691.txt'),
+      'utf8'
+    ).replace('3691', '3965'); // Simulate BP 3965
+
+    const first = rosterStore.ingestRosterText(bp3965v1Text);
+    expect(first.isNew).toBe(true);
+    expect(first.previousRoster).toBeNull();
+    expect(first.roster.summary.bidPeriod).toBe('3965');
+
+    // 2. Now BP 3970 arrives (different bid period)
+    const bp3970Text = fs.readFileSync(
+      path.join(__dirname, '../examples/roster-174423-bp-3695.txt'),
+      'utf8'
+    ).replace('3695', '3970'); // Simulate BP 3970
+
+    const second = rosterStore.ingestRosterText(bp3970Text);
+    expect(second.isNew).toBe(true);
+    expect(second.previousRoster).toBeNull(); // No comparison to BP 3965
+    expect(second.roster.summary.bidPeriod).toBe('3970');
+
+    // 3. Updated BP 3965 arrives (modified version of the same bid period)
+    // Change a flight number to make it a meaningful update
+    const bp3965v2Text = bp3965v1Text
+      .replace(/23 Mon  8085A3      936\/545/g, '23 Mon  8085A3      936/546')
+      .replace(/23Jun       545  BNE  1810 SYD  1941/g, '23Jun       546  BNE  1810 SYD  1941');
+
+    const third = rosterStore.ingestRosterText(bp3965v2Text);
+    expect(third.isNew).toBe(true);
+    expect(third.updated).toBe(true); // This is an update to existing BP 3965
+    expect(third.previousRoster).toBeDefined(); // Should compare to BP 3965 v1
+    expect(third.previousRoster.summary.bidPeriod).toBe('3965');
+    expect(third.roster.summary.bidPeriod).toBe('3965');
+    
+    // The previous roster should be the original BP 3965, NOT BP 3970
+    // Check that previous had the old flight number
+    const prevHas545 = third.previousRoster.entries.some(e => 
+      e.service && e.service.includes('545')
+    );
+    expect(prevHas545).toBe(true);
+
+    // Check that new has the updated flight number
+    const newHas546 = third.roster.entries.some(e => 
+      e.service && e.service.includes('546')
+    );
+    expect(newHas546).toBe(true);
+
+    const bucket = rosterStore.getRosterBucket(first.rosterId);
+    expect(bucket).toBeDefined();
+    // Should have 2 rosters: BP 3965 (updated) and BP 3970
+    expect(bucket.rosters.length).toBe(2);
+    
+    // Verify BP 3965 was replaced (not added)
+    const bp3965Rosters = bucket.rosters.filter(r => r.summary.bidPeriod === '3965');
+    expect(bp3965Rosters.length).toBe(1); // Only one version of BP 3965
+    
+    const bp3970Rosters = bucket.rosters.filter(r => r.summary.bidPeriod === '3970');
+    expect(bp3970Rosters.length).toBe(1); // One version of BP 3970
+  });
 });
+

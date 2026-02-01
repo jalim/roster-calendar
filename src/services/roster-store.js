@@ -207,7 +207,9 @@ function ingestRosterText(rosterText) {
     }
   }
 
-  const previousRoster = existing.rosters.length > 0 ? existing.rosters[existing.rosters.length - 1] : null;
+  // If this is a new roster for a different bid period, don't compare against other bid periods.
+  // Only compare against the previous version of the SAME bid period.
+  const previousRoster = null;
   existing.rosters.push(roster);
   existing.rosterHashes.add(rosterHash);
   persistNow(process.env);

@@ -17,4 +17,5 @@ imap-diagnose*.out
 /data/
 !src/data/qantas_airports_timezones.csv
 examples/webCisRoster_*.txt
+examples/roster-174423-*.txt
 

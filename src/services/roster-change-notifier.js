@@ -31,12 +31,17 @@ function buildBody({ rosterId, roster, previousRoster, isNew }) {
   const name = employee.name ? safeString(employee.name).trim() : '';
   const staffNo = employee.staffNo ? safeString(employee.staffNo).trim() : '';
   const base = employee.base ? safeString(employee.base).trim() : '';
+  const bidPeriod = roster && roster.summary && roster.summary.bidPeriod ? safeString(roster.summary.bidPeriod).trim() : '';
 
   const diff = previousRoster ? diffRosters(previousRoster, roster) : null;
   let diffText;
   
   if (!previousRoster) {
-    diffText = 'First roster received (no previous roster on file).';
+    if (bidPeriod) {
+      diffText = `New bid period roster received (BP ${bidPeriod}).`;
+    } else {
+      diffText = 'First roster received (no previous roster on file).';
+    }
   } else if (isNew === false) {
     // Duplicate roster - same content as before
     diffText = 'Duplicate roster received (no changes from previous version).';
@@ -101,5 +106,7 @@ async function notifyRosterChange({ rosterId, rosterText, roster, previousRoster
 }
 
 module.exports = {
-  notifyRosterChange
+  notifyRosterChange,
+  // For testing
+  buildBody
 };
