@@ -12,6 +12,11 @@ class ICSCalendarService {
     this.timezoneService = new TimezoneService();
   }
 
+  normalizePort(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).trim().toUpperCase();
+  }
+
   parseHHMMToMinutes(value) {
     if (value === null || value === undefined) return null;
     const raw = String(value).trim();
@@ -235,6 +240,10 @@ class ICSCalendarService {
         const dutyEvent = this.createDutyEventFromPattern(dutyPattern, roster.employee, matchingEntry);
         if (dutyEvent) events.push(dutyEvent);
       }
+
+      // Add all-day Pattern events for multi-day pairings (away from base)
+      const patternEvents = this.createAllDayPatternEventsFromDutyPatterns(roster.dutyPatterns, roster.employee);
+      for (const e of patternEvents) events.push(e);
     }
 
     for (const { entry, month, year } of entriesWithDates) {
@@ -255,6 +264,184 @@ class ICSCalendarService {
         const flightEvent = this.createEventFromFlightLeg(flightLeg, roster.employee);
         if (flightEvent) events.push(flightEvent);
       }
+    }
+
+    return events;
+  }
+
+  getDutyPatternWindow(dutyPattern, employee) {
+    if (!dutyPattern || !Array.isArray(dutyPattern.legs) || dutyPattern.legs.length === 0) return null;
+
+    const startDate = dutyPattern.dated
+      ? { year: dutyPattern.dated.year, month: dutyPattern.dated.month, day: dutyPattern.dated.day }
+      : { year: dutyPattern.legs[0].year, month: dutyPattern.legs[0].month, day: dutyPattern.legs[0].day };
+
+    const endLeg = dutyPattern.legs[dutyPattern.legs.length - 1];
+    const endDate = { year: endLeg.year, month: endLeg.month, day: endLeg.day };
+
+    const reportPort = dutyPattern.reportPort || dutyPattern.legs[0].departPort || (employee && employee.base);
+    const releasePort = dutyPattern.releasePort || endLeg.arrivePort || (employee && employee.base);
+
+    const reportTz = this.getTimezoneForPortOrBase(reportPort, employee);
+    const releaseTz = this.getTimezoneForPortOrBase(releasePort, employee);
+
+    const reportTime = this.parseTime(dutyPattern.reportTime);
+    const releaseTime = this.parseTime(dutyPattern.releaseTime);
+
+    if (!reportTime || !releaseTime || !reportTz || !releaseTz) return null;
+
+    const startUtc = this.toUtcDateArray({
+      year: startDate.year,
+      month: startDate.month + 1,
+      day: startDate.day,
+      time: reportTime,
+      timezone: reportTz
+    });
+
+    let addReleaseDays = 0;
+    let endUtc = this.toUtcDateArray({
+      year: endDate.year,
+      month: endDate.month + 1,
+      day: endDate.day,
+      time: releaseTime,
+      timezone: releaseTz
+    });
+
+    if (!startUtc || !endUtc) return null;
+
+    const startDt = DateTime.utc(...startUtc);
+    let endDt = DateTime.utc(...endUtc);
+    if (endDt < startDt) {
+      addReleaseDays = 1;
+      endUtc = this.toUtcDateArray({
+        year: endDate.year,
+        month: endDate.month + 1,
+        day: endDate.day,
+        time: releaseTime,
+        timezone: releaseTz,
+        addDays: 1
+      });
+      if (!endUtc) return null;
+      endDt = DateTime.utc(...endUtc);
+    }
+
+    const localEnd = DateTime.fromObject(
+      { year: endDate.year, month: endDate.month + 1, day: endDate.day, hour: releaseTime[0], minute: releaseTime[1] },
+      { zone: releaseTz }
+    ).plus({ days: addReleaseDays });
+
+    if (!localEnd.isValid) return null;
+
+    return {
+      dutyCode: dutyPattern.dutyCode || null,
+      reportPort,
+      releasePort,
+      reportTimeStr: dutyPattern.reportTime || '',
+      releaseTimeStr: dutyPattern.releaseTime || '',
+      startDate,
+      endDate,
+      startUtc,
+      endUtc,
+      startDt,
+      endDt,
+      endLocalDate: { year: localEnd.year, month: localEnd.month, day: localEnd.day }
+    };
+  }
+
+  createAllDayPatternEventsFromDutyPatterns(dutyPatterns, employee) {
+    const patterns = Array.isArray(dutyPatterns) ? dutyPatterns.filter(Boolean) : [];
+    if (patterns.length === 0) return [];
+
+    const base = this.normalizePort(employee && employee.base);
+    if (!base) return [];
+
+    const byDutyCode = new Map();
+    for (const p of patterns) {
+      const code = p && p.dutyCode ? String(p.dutyCode).trim() : '';
+      if (!code) continue;
+      if (!byDutyCode.has(code)) byDutyCode.set(code, []);
+      byDutyCode.get(code).push(p);
+    }
+
+    const events = [];
+    for (const [dutyCode, group] of byDutyCode.entries()) {
+      if (!Array.isArray(group) || group.length < 2) continue;
+
+      const windows = group
+        .map(p => this.getDutyPatternWindow(p, employee))
+        .filter(Boolean)
+        .sort((a, b) => a.startDt.toMillis() - b.startDt.toMillis());
+
+      if (windows.length < 2) continue;
+
+      const first = windows[0];
+      const last = windows[windows.length - 1];
+
+      const startPort = this.normalizePort(first.reportPort);
+      const endPort = this.normalizePort(last.releasePort);
+
+      // Skip patterns that are entirely at base across all duty periods.
+      const allAtBase = windows.every(w =>
+        this.normalizePort(w.reportPort) === base && this.normalizePort(w.releasePort) === base
+      );
+      if (allAtBase) continue;
+
+      const startDate = first.startDate;
+      const endLocalDate = last.endLocalDate;
+
+      // Only for patterns that span more than one calendar day.
+      if (
+        startDate.year === endLocalDate.year &&
+        startDate.month === endLocalDate.month &&
+        startDate.day === endLocalDate.day
+      ) {
+        continue;
+      }
+
+      const endExclusive = DateTime
+        .fromObject({ year: endLocalDate.year, month: endLocalDate.month, day: endLocalDate.day }, { zone: 'utc' })
+        .plus({ days: 1 });
+
+      // Slip (overnight) ports are inferred from consecutive duty periods where the
+      // release port matches the next day's report port (common roster pattern).
+      const slipPorts = [];
+      for (let i = 0; i < windows.length - 1; i++) {
+        const a = windows[i];
+        const b = windows[i + 1];
+        const slip = this.normalizePort(a.releasePort);
+        if (!slip || slip === base) continue;
+        if (slip !== this.normalizePort(b.reportPort)) continue;
+        if (!slipPorts.includes(slip)) slipPorts.push(slip);
+      }
+
+      const title = slipPorts.length > 0
+        ? `Pattern: ${dutyCode} ${slipPorts.join(' ')}`
+        : `Pattern: ${dutyCode}`;
+
+      const dutyLines = windows
+        .map(w => {
+          const y = w.startDate.year;
+          const m = String(w.startDate.month + 1).padStart(2, '0');
+          const d = String(w.startDate.day).padStart(2, '0');
+          const timeRange = (w.reportTimeStr || w.releaseTimeStr)
+            ? `${String(w.reportTimeStr || '').trim()}-${String(w.releaseTimeStr || '').trim()}`.trim()
+            : '';
+          return `${y}-${m}-${d}: ${this.normalizePort(w.reportPort)}-${this.normalizePort(w.releasePort)}${timeRange ? ` ${timeRange}` : ''}`;
+        })
+        .join('\n');
+
+      let description = `Pattern: ${dutyCode}\nAway from base: ${base}\nStart: ${startPort}\nEnd: ${endPort}`;
+      if (dutyLines) description += `\n\nDuties:\n${dutyLines}`;
+
+      events.push({
+        title,
+        description,
+        start: [startDate.year, startDate.month + 1, startDate.day],
+        end: [endExclusive.year, endExclusive.month, endExclusive.day],
+        productId: 'roster-calendar/ics',
+        calName: `${employee.name || 'Pilot'} Roster`,
+        uid: `${startDate.year}-${startDate.month + 1}-${startDate.day}-pattern-${String(dutyCode).trim()}@roster-calendar`
+      });
     }
 
     return events;

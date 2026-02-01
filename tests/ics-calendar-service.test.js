@@ -264,4 +264,106 @@ describe('ICSCalendarService', () => {
     expect(available).toBeDefined();
     expect(available.duration).toEqual({ days: 1 });
   });
+
+  test('should create an all-day Pattern event spanning multi-day trips away from base', () => {
+    const parser = new QantasRosterParser();
+    const samplePath = path.join(__dirname, '../examples/sample-webcis-roster.txt');
+    const rosterText = fs.readFileSync(samplePath, 'utf-8');
+    const parsed = parser.parse(rosterText);
+
+    const events = icsService.convertRosterToEvents(parsed);
+    const pattern = events.find(e => e.title === 'Pattern: 8130');
+
+    expect(pattern).toBeDefined();
+    expect(Array.isArray(pattern.start)).toBe(true);
+    expect(pattern.start.length).toBe(3);
+    expect(Array.isArray(pattern.end)).toBe(true);
+    expect(pattern.end.length).toBe(3);
+    expect(String(pattern.description || '')).toContain('Away from base: PER');
+
+    // End should be exclusive and after start
+    const startMs = Date.UTC(pattern.start[0], pattern.start[1] - 1, pattern.start[2]);
+    const endMs = Date.UTC(pattern.end[0], pattern.end[1] - 1, pattern.end[2]);
+    expect(endMs).toBeGreaterThan(startMs);
+  });
+
+  test('should not create Pattern all-day events for single-day/single-duty patterns', () => {
+    const parser = new QantasRosterParser();
+    const samplePath = path.join(__dirname, '../examples/sample-webcis-roster.txt');
+    const rosterText = fs.readFileSync(samplePath, 'utf-8');
+    const parsed = parser.parse(rosterText);
+
+    const counts = new Map();
+    for (const p of (parsed.dutyPatterns || [])) {
+      if (!p || !p.dutyCode) continue;
+      const code = String(p.dutyCode).trim();
+      counts.set(code, (counts.get(code) || 0) + 1);
+    }
+
+    const singleCode = Array.from(counts.entries()).find(([, n]) => n === 1);
+    expect(singleCode).toBeDefined();
+
+    const [code] = singleCode;
+    const events = icsService.convertRosterToEvents(parsed);
+    const pattern = events.find(e => e.title === `Pattern: ${code}`);
+
+    expect(pattern).toBeUndefined();
+  });
+
+  test('Pattern title should include slip (overnight) ports', () => {
+    // Create a synthetic 2-day pattern with an overnight slip in SYD.
+    // Day 1: PER ... SYD (release in SYD)
+    // Day 2: SYD ... PER (report in SYD)
+    const employee = { name: 'TEST', base: 'PER' };
+    const dutyPatterns = [
+      {
+        dutyCode: '9999',
+        dated: { year: 2026, month: 0, day: 5 },
+        reportTime: '0800',
+        reportPort: 'PER',
+        releaseTime: '2200',
+        releasePort: 'SYD',
+        legs: [
+          {
+            year: 2026,
+            month: 0,
+            day: 5,
+            flightNumber: 'QF001',
+            passive: false,
+            departPort: 'PER',
+            departTime: '0900',
+            arrivePort: 'SYD',
+            arriveTime: '2100'
+          }
+        ]
+      },
+      {
+        dutyCode: '9999',
+        dated: { year: 2026, month: 0, day: 6 },
+        reportTime: '0700',
+        reportPort: 'SYD',
+        releaseTime: '1700',
+        releasePort: 'PER',
+        legs: [
+          {
+            year: 2026,
+            month: 0,
+            day: 6,
+            flightNumber: 'QF002',
+            passive: false,
+            departPort: 'SYD',
+            departTime: '0800',
+            arrivePort: 'PER',
+            arriveTime: '1600'
+          }
+        ]
+      }
+    ];
+
+    const events = icsService.createAllDayPatternEventsFromDutyPatterns(dutyPatterns, employee);
+    const pattern = events.find(e => e.title && e.title.startsWith('Pattern: 9999'));
+
+    expect(pattern).toBeDefined();
+    expect(pattern.title).toBe('Pattern: 9999 SYD');
+  });
 });
