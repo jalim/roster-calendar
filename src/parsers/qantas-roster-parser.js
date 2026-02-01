@@ -329,6 +329,7 @@ class QantasRosterParser {
    */
   parseRosterEntries(lines, roster) {
     let inDataSection = false;
+    let lastFlightDutyCode = null;
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -355,6 +356,20 @@ class QantasRosterParser {
       // Parse roster line
       const entry = this.parseRosterLine(line);
       if (entry) {
+        // The roster table can contain continuation lines for multi-day trips/patterns
+        // where the Duty(Role) column is blank. In those cases, carry forward the
+        // last seen flight duty code so downstream consumers (e.g. Pattern Details
+        // enrichment) can match the correct duty/credit hours.
+        if (entry.dutyType === 'FLIGHT') {
+          if (entry.dutyCode) {
+            lastFlightDutyCode = entry.dutyCode;
+          } else if (lastFlightDutyCode) {
+            entry.dutyCode = lastFlightDutyCode;
+          }
+        } else {
+          lastFlightDutyCode = null;
+        }
+
         roster.entries.push(entry);
       }
     }

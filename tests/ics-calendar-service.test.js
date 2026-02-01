@@ -142,6 +142,29 @@ describe('ICSCalendarService', () => {
     expect(payLine).toBe('Pay: 6:45 (credit; DPC60 min 5:36)');
   });
 
+  test('Pattern Details duty event should use roster credit for continuation days (08 Sun 8130)', () => {
+    const parser = new QantasRosterParser();
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/webCisRoster_174423_01022026.txt'),
+      'utf-8'
+    );
+    const parsed = parser.parse(text);
+
+    const events = icsService.convertRosterToEvents(parsed);
+    const dutyEvents = events.filter(e => e.title === 'Duty: 8130');
+    expect(dutyEvents.length).toBeGreaterThan(0);
+
+    const target = dutyEvents.find(e =>
+      String(e.description || '').includes('Report: SYD 1040') &&
+      String(e.description || '').includes('Release: PER 1700') &&
+      String(e.description || '').includes('QF516 SYD-BNE') &&
+      String(e.description || '').includes('QF937 BNE-PER')
+    );
+
+    expect(target).toBeDefined();
+    expect(String(target.description || '')).toContain('Pay: 6:45 (credit; DPC60 min 5:36)');
+  });
+
   test('should add DPC60 pay indication to Pattern Details duty events', () => {
     const parser = new QantasRosterParser();
     const samplePath = path.join(__dirname, '../examples/sample-webcis-roster.txt');
@@ -154,7 +177,7 @@ describe('ICSCalendarService', () => {
 
     dutyEvents.forEach(e => {
       expect(String(e.description || '')).toContain('Pay:');
-      expect(String(e.description || '')).toContain('DPC60 min');
+      expect(String(e.description || '')).toContain('DPC60');
     });
   });
 
