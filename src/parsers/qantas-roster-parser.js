@@ -117,6 +117,15 @@ class QantasRosterParser {
   parseHeader(lines, roster) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+
+      // Capture bid period number when present (e.g. "Bid Period 3725")
+      if (line.includes('Bid Period')) {
+        const match = line.match(/\bBid\s+Period\s+(\d{3,6})\b/i);
+        if (match) {
+          if (!roster.summary) roster.summary = {};
+          roster.summary.bidPeriod = match[1];
+        }
+      }
       
       // Extract employee information
       if (line.includes('Name    :')) {

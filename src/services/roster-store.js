@@ -127,6 +127,32 @@ function getRosterHash(rosterText) {
   return crypto.createHash('sha256').update(String(rosterText || ''), 'utf8').digest('hex');
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// We treat a "roster period" as the bid period start/end when available.
+// This is the safest way to detect roster updates for the same period.
+function getRosterPeriodKeyFromSummary(roster) {
+  const bidPeriod = roster && roster.summary && roster.summary.bidPeriod ? String(roster.summary.bidPeriod).trim() : '';
+  if (bidPeriod) {
+    return `bp-${bidPeriod}`;
+  }
+
+  const start = roster && roster.summary && roster.summary.periodStart ? roster.summary.periodStart : null;
+  if (!start || !Number.isFinite(start.year) || !Number.isFinite(start.month) || !Number.isFinite(start.day)) return null;
+
+  const end = roster && roster.summary && roster.summary.periodEnd ? roster.summary.periodEnd : null;
+
+  const startKey = `${start.year}-${pad2(start.month + 1)}-${pad2(start.day)}`;
+  if (!end || !Number.isFinite(end.year) || !Number.isFinite(end.month) || !Number.isFinite(end.day)) {
+    return `${startKey}_end-unknown`;
+  }
+
+  const endKey = `${end.year}-${pad2(end.month + 1)}-${pad2(end.day)}`;
+  return `${startKey}_${endKey}`;
+}
+
 /**
  * Ingest raw roster text, parse it, and store it (deduplicated by roster text hash).
  * @param {string} rosterText
@@ -138,6 +164,11 @@ function ingestRosterText(rosterText) {
 
   const rosterId = getRosterId(roster);
   const rosterHash = getRosterHash(rosterText);
+  const periodKey = getRosterPeriodKeyFromSummary(roster);
+
+  if (periodKey) {
+    roster._periodKey = periodKey;
+  }
 
   const existing = rosters.get(rosterId);
   if (!existing) {
@@ -155,6 +186,23 @@ function ingestRosterText(rosterText) {
   }
 
   existing.employee = roster.employee || existing.employee;
+
+  // If this roster matches an existing roster period for this employee, replace the stored roster.
+  // This prevents old events lingering in the merged ICS output when the roster is revised.
+  if (periodKey) {
+    const idx = existing.rosters.findIndex(r => {
+      const key = getRosterPeriodKeyFromSummary(r);
+      return key && key === periodKey;
+    });
+
+    if (idx >= 0) {
+      existing.rosters[idx] = roster;
+      existing.rosterHashes.add(rosterHash);
+      persistNow(process.env);
+      return { rosterId, roster, isNew: true, updated: true };
+    }
+  }
+
   existing.rosters.push(roster);
   existing.rosterHashes.add(rosterHash);
   persistNow(process.env);

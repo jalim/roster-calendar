@@ -192,7 +192,9 @@ async function pollOnce(config, logger = console) {
     lock = await client.getMailboxLock(config.mailbox);
 
     const searchQuery = config.searchMode === 'all' ? { all: true } : { seen: false };
-    const uids = await client.search(searchQuery);
+    // We use UID-based operations (fetchOne(..., { uid: true }), messageFlagsAdd(..., { uid: true }), etc.)
+    // so ensure the search results are UIDs (not sequence numbers).
+    const uids = await client.search(searchQuery, { uid: true });
     if (!uids || uids.length === 0) {
       return { checked: 0, processed: 0 };
     }
