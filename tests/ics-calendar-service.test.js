@@ -366,4 +366,78 @@ describe('ICSCalendarService', () => {
     expect(pattern).toBeDefined();
     expect(pattern.title).toBe('Pattern: 9999 SYD');
   });
+
+  test('should detect Long Slip credit when slip exceeds 30 hours (PLFP02A1 in provided roster)', () => {
+    const parser = new QantasRosterParser();
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/webCisRoster_174423_01022026.txt'),
+      'utf-8'
+    );
+    const parsed = parser.parse(text);
+
+    const events = icsService.convertRosterToEvents(parsed);
+    const pattern = events.find(e => String(e.title || '').startsWith('Pattern: PLFP02A1'));
+
+    expect(pattern).toBeDefined();
+    expect(String(pattern.title)).toContain('SYD');
+    expect(String(pattern.title)).toContain('(Long Slip)');
+
+    expect(String(pattern.description || '')).toContain('Slip ports: SYD');
+    expect(String(pattern.description || '')).toContain('Long slip credit: SYD 45:10');
+  });
+
+  test('should not detect Long Slip credit at exactly 30:00 (strictly greater required)', () => {
+    const employee = { name: 'TEST', base: 'PER' };
+    const dutyPatterns = [
+      {
+        dutyCode: '3000',
+        dated: { year: 2026, month: 0, day: 5 },
+        reportTime: '0600',
+        reportPort: 'PER',
+        releaseTime: '0800',
+        releasePort: 'SYD',
+        legs: [
+          {
+            year: 2026,
+            month: 0,
+            day: 5,
+            flightNumber: 'QF101',
+            passive: false,
+            departPort: 'PER',
+            departTime: '0700',
+            arrivePort: 'SYD',
+            arriveTime: '0800'
+          }
+        ]
+      },
+      {
+        dutyCode: '3000',
+        dated: { year: 2026, month: 0, day: 6 },
+        reportTime: '1400',
+        reportPort: 'SYD',
+        releaseTime: '1800',
+        releasePort: 'PER',
+        legs: [
+          {
+            year: 2026,
+            month: 0,
+            day: 6,
+            flightNumber: 'QF102',
+            passive: false,
+            departPort: 'SYD',
+            departTime: '1500',
+            arrivePort: 'PER',
+            arriveTime: '1800'
+          }
+        ]
+      }
+    ];
+
+    const events = icsService.createAllDayPatternEventsFromDutyPatterns(dutyPatterns, employee);
+    const pattern = events.find(e => String(e.title || '').startsWith('Pattern: 3000'));
+    expect(pattern).toBeDefined();
+    expect(String(pattern.title)).toContain('SYD');
+    expect(String(pattern.title)).not.toContain('(Long Slip)');
+    expect(String(pattern.description || '')).not.toContain('Long slip credit');
+  });
 });

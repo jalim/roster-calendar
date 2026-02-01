@@ -405,18 +405,30 @@ class ICSCalendarService {
       // Slip (overnight) ports are inferred from consecutive duty periods where the
       // release port matches the next day's report port (common roster pattern).
       const slipPorts = [];
+      const slipMinutesByPort = new Map();
+      const longSlipMinutesByPort = new Map();
+      const LONG_SLIP_THRESHOLD_MINUTES = 30 * 60;
       for (let i = 0; i < windows.length - 1; i++) {
         const a = windows[i];
         const b = windows[i + 1];
         const slip = this.normalizePort(a.releasePort);
         if (!slip || slip === base) continue;
         if (slip !== this.normalizePort(b.reportPort)) continue;
+
+        const gapMinutes = Math.max(0, Math.round(b.startDt.diff(a.endDt, 'minutes').minutes));
+        if (!slipMinutesByPort.has(slip)) slipMinutesByPort.set(slip, gapMinutes);
+        if (gapMinutes > LONG_SLIP_THRESHOLD_MINUTES && !longSlipMinutesByPort.has(slip)) {
+          longSlipMinutesByPort.set(slip, gapMinutes);
+        }
+
         if (!slipPorts.includes(slip)) slipPorts.push(slip);
       }
 
+      const longSlipPorts = Array.from(longSlipMinutesByPort.keys());
+
       const title = slipPorts.length > 0
-        ? `Pattern: ${dutyCode} ${slipPorts.join(' ')}`
-        : `Pattern: ${dutyCode}`;
+        ? `Pattern: ${dutyCode} ${slipPorts.join(' ')}${longSlipPorts.length > 0 ? ' (Long Slip)' : ''}`
+        : `Pattern: ${dutyCode}${longSlipPorts.length > 0 ? ' (Long Slip)' : ''}`;
 
       const dutyLines = windows
         .map(w => {
@@ -431,6 +443,16 @@ class ICSCalendarService {
         .join('\n');
 
       let description = `Pattern: ${dutyCode}\nAway from base: ${base}\nStart: ${startPort}\nEnd: ${endPort}`;
+
+      if (slipPorts.length > 0) {
+        description += `\nSlip ports: ${slipPorts.join(' ')}`;
+      }
+      if (longSlipPorts.length > 0) {
+        const longSlipLines = longSlipPorts
+          .map(p => `${p} ${this.formatMinutesAsHMM(longSlipMinutesByPort.get(p))}`)
+          .join(', ');
+        description += `\nLong slip credit: ${longSlipLines}`;
+      }
       if (dutyLines) description += `\n\nDuties:\n${dutyLines}`;
 
       events.push({
