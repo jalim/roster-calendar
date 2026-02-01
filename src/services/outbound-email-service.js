@@ -8,21 +8,42 @@ function parseBoolean(value, defaultValue = false) {
   return defaultValue;
 }
 
+function parseOptionalBoolean(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  return parseBoolean(value, undefined);
+}
+
 function parseNumber(value, defaultValue) {
   const n = Number(value);
   return Number.isFinite(n) ? n : defaultValue;
 }
 
 function getOutboundEmailConfig(env = process.env) {
+  const port = parseNumber(env.ROSTER_SMTP_PORT, 587);
+
+  // Nodemailer "secure" must match the port semantics:
+  // - 465: implicit TLS (secure: true)
+  // - 587/25: plaintext + optional STARTTLS (secure: false)
+  // If the user explicitly sets ROSTER_SMTP_SECURE, respect it.
+  const secureExplicit = parseOptionalBoolean(env.ROSTER_SMTP_SECURE);
+  const secure = secureExplicit !== undefined ? secureExplicit : (port === 465);
+
   return {
-    enabled: parseBoolean(env.ROSTER_NOTIFY_ENABLED, false),
+    enabled: parseBoolean(env.ROSTER_OUTBOUND_EMAIL_ENABLED, parseBoolean(env.ROSTER_NOTIFY_ENABLED, false)),
     dryRun: parseBoolean(env.ROSTER_NOTIFY_DRY_RUN, false),
     host: env.ROSTER_SMTP_HOST,
-    port: parseNumber(env.ROSTER_SMTP_PORT, 587),
-    secure: parseBoolean(env.ROSTER_SMTP_SECURE, false),
+    port,
+    secure,
     user: env.ROSTER_SMTP_USER,
     pass: env.ROSTER_SMTP_PASS,
-    from: env.ROSTER_EMAIL_FROM || env.ROSTER_SMTP_USER
+    from: env.ROSTER_EMAIL_FROM || env.ROSTER_SMTP_USER,
+
+    // Optional knobs for slow/latent networks or strict TLS setups.
+    connectionTimeoutMs: parseNumber(env.ROSTER_SMTP_CONNECTION_TIMEOUT_MS, 30_000),
+    greetingTimeoutMs: parseNumber(env.ROSTER_SMTP_GREETING_TIMEOUT_MS, 30_000),
+    socketTimeoutMs: parseNumber(env.ROSTER_SMTP_SOCKET_TIMEOUT_MS, 120_000),
+    requireTLS: parseOptionalBoolean(env.ROSTER_SMTP_REQUIRE_TLS),
+    tlsRejectUnauthorized: parseBoolean(env.ROSTER_SMTP_TLS_REJECT_UNAUTHORIZED, true)
   };
 }
 
@@ -45,6 +66,13 @@ function createTransport(config) {
     host: config.host,
     port: config.port,
     secure: config.secure,
+    connectionTimeout: config.connectionTimeoutMs,
+    greetingTimeout: config.greetingTimeoutMs,
+    socketTimeout: config.socketTimeoutMs,
+    requireTLS: config.requireTLS,
+    tls: {
+      rejectUnauthorized: config.tlsRejectUnauthorized
+    },
     auth: {
       user: config.user,
       pass: config.pass

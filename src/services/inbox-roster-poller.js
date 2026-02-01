@@ -125,9 +125,27 @@ async function processMessage({ client, uid, config, logger = console }) {
         config._env || process.env,
         logger
       );
+
+      if (notify && notify.notified) {
+        logger.log(`[notify] sent roster email to=${notify.to} rosterId=${rosterId}`);
+      } else if (notify) {
+        logger.log(
+          `[notify] skipped roster email rosterId=${rosterId} reason=${notify.reason || 'unknown'}`
+        );
+      }
     } catch (notifyErr) {
       const msg = notifyErr && notifyErr.message ? notifyErr.message : String(notifyErr);
-      logger.warn(`[notify] failed to send roster email: ${msg}`);
+      logger.warn(`[notify] failed to send roster email: ${msg}`,
+        {
+          rosterId,
+          error: serializeError(notifyErr),
+          smtp: {
+            host: config && config._env ? config._env.ROSTER_SMTP_HOST : undefined,
+            port: config && config._env ? config._env.ROSTER_SMTP_PORT : undefined,
+            secure: config && config._env ? config._env.ROSTER_SMTP_SECURE : undefined
+          }
+        }
+      );
       notify = { notified: false, reason: 'error', error: msg };
     }
   }
@@ -225,9 +243,15 @@ async function pollOnce(config, logger = console) {
 
         if (result.processed) {
           processed++;
+          const notifyStatus = result && result.notify
+            ? (result.notify.notified ? 'sent' : `skipped:${result.notify.reason || 'unknown'}`)
+            : (config.notifyEnabled
+              ? (result.isNew ? 'unknown' : 'skipped:not-new')
+              : 'disabled');
           logger.log(
             `[inbox] processed uid=${uid} rosterId=${result.rosterId} entries=${result.entriesCount} new=${result.isNew}`
           );
+          logger.log(`[inbox] notify status uid=${uid} rosterId=${result.rosterId} ${notifyStatus}`);
         } else {
           logger.log(`[inbox] skipped uid=${uid} reason=${result.reason}`);
         }

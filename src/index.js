@@ -9,6 +9,7 @@ require('dotenv').config();
 const rosterRoutes = require('./routes/roster-routes');
 const { startInboxRosterPolling } = require('./services/inbox-roster-poller');
 const { createLogger, serializeError } = require('./services/logger');
+const { maybeSendStartupEmail } = require('./services/startup-email-notifier');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -110,6 +111,24 @@ if (require.main === module) {
     logger.error('[startup] inbox polling disabled due to error', { error: serializeError(err) });
     inboxPoller = { stop: () => {} };
   }
+
+  // Health monitoring: email on each successful startup.
+  // Non-fatal by design (don't take down the service if SMTP is down).
+  Promise.resolve()
+    .then(() => maybeSendStartupEmail(process.env, logger.child({ component: 'startup-email' }), {
+      port: PORT,
+      inboxConfig: inboxPoller && inboxPoller.config ? inboxPoller.config : undefined
+    }))
+    .then(result => {
+      if (result && result.sent) {
+        logger.info('[startup] startup email sent', { to: process.env.ROSTER_STARTUP_EMAIL_TO || 'admin@lumu.au' });
+      } else if (result && result.reason && result.reason !== 'disabled') {
+        logger.info('[startup] startup email not sent', { reason: result.reason });
+      }
+    })
+    .catch(err => {
+      logger.warn('[startup] startup email failed', { error: serializeError(err) });
+    });
 
   const fatalExit = (kind, err) => {
     logger.error(`[fatal] ${kind}`, { error: serializeError(err) });
