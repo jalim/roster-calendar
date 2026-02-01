@@ -409,7 +409,7 @@ class QantasRosterParser {
         // where the Duty(Role) column is blank. In those cases, carry forward the
         // last seen flight duty code so downstream consumers (e.g. Pattern Details
         // enrichment) can match the correct duty/credit hours.
-        if (entry.dutyType === 'FLIGHT') {
+        if (entry.dutyType === 'FLIGHT' || entry.dutyType === 'SIMULATOR') {
           if (entry.dutyCode) {
             lastFlightDutyCode = entry.dutyCode;
           } else if (lastFlightDutyCode) {
@@ -419,7 +419,18 @@ class QantasRosterParser {
           lastFlightDutyCode = null;
         }
 
-        roster.entries.push(entry);
+        // Check if this day already exists in roster.entries
+        // If it does and this entry has a duty code, replace the previous entry
+        // This handles cases where rosters have correction lines (e.g., simulator sessions)
+        const existingIndex = roster.entries.findIndex(e => e.day === entry.day);
+        if (existingIndex !== -1 && entry.dutyCode && entry.dutyCode !== roster.entries[existingIndex].dutyCode) {
+          // Replace the existing entry with this corrected one
+          roster.entries[existingIndex] = entry;
+        } else if (existingIndex === -1) {
+          // No duplicate - add normally
+          roster.entries.push(entry);
+        }
+        // If existingIndex !== -1 but same dutyCode, skip (it's a true duplicate)
       }
     }
   }
@@ -453,25 +464,58 @@ class QantasRosterParser {
     };
 
     // Check if this is a continuation line (no duty code, starts with service)
-    const serviceOnlyMatch = restOfLine.match(/^\s*(P?\d+(?:\/\d+)?)\s+(\d{4})\s+(\d{4})/);
-    if (serviceOnlyMatch) {
+    // Continuation lines can have various service formats:
+    // - Flight numbers: 460/653, P936
+    // - Simulator codes: &SIM06CA, &SIM06CB
+    // - Aircraft types (passive positioning): A780, A332
+    // The key indicator is significant whitespace before the first token (no duty code in that column)
+    const lineAfterDate = line.substring(dateMatch[0].length);
+    const hasSignificantLeadingWhitespace = lineAfterDate.match(/^\s{8,}/); // 8+ spaces indicates empty duty column
+    
+    const serviceOnlyMatch = restOfLine.match(/^\s*([&A-Z]?[A-Z0-9]+(?:\/[A-Z0-9]+)?)\s+(\d{4})\s+(\d{4})/);
+    if (serviceOnlyMatch && hasSignificantLeadingWhitespace) {
       entry.dutyType = 'FLIGHT';
       const rawServiceToken = serviceOnlyMatch[1];
-      entry.service = this.normalizeService(rawServiceToken);
-      entry.signOn = serviceOnlyMatch[2];
-      entry.signOff = serviceOnlyMatch[3];
       
-      // Check for passive flights (starting with P)
-      if (rawServiceToken && rawServiceToken.startsWith('P')) {
+      // Check for simulator sessions (starting with &)
+      if (rawServiceToken.startsWith('&')) {
+        entry.dutyType = 'SIMULATOR';
+        entry.service = rawServiceToken;
+        entry.description = `Simulator ${rawServiceToken}`;
+      }
+      // Check for alternate PAX flights (starting with A followed by digits, e.g., A780)
+      else if (rawServiceToken.match(/^A\d{3,4}$/)) {
         entry.passive = true;
+        // Strip the 'A' prefix and normalize as flight number
+        const flightNum = rawServiceToken.substring(1);
+        entry.service = this.normalizeFlightNumber(flightNum);
+        entry.description = `Alternate PAX ${entry.service}`;
+      }
+      // Check for passive flights (starting with P)
+      else if (rawServiceToken.startsWith('P')) {
+        entry.passive = true;
+        entry.service = this.normalizeService(rawServiceToken);
         entry.description = `Passive Flight ${entry.service}`;
       }
+      // Regular flight continuation
+      else {
+        entry.service = this.normalizeService(rawServiceToken);
+      }
+      
+      entry.signOn = serviceOnlyMatch[2];
+      entry.signOff = serviceOnlyMatch[3];
       
       // Parse duty and credit hours
       const hoursMatch = restOfLine.match(/(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/);
       if (hoursMatch) {
         entry.dutyHours = hoursMatch[1];
         entry.creditHours = hoursMatch[2];
+      }
+      
+      // Parse port if present
+      const portMatch = restOfLine.match(/\b([A-Z]{3})\s*$/);
+      if (portMatch) {
+        entry.port = portMatch[1];
       }
       
       return entry;
@@ -498,6 +542,26 @@ class QantasRosterParser {
       entry.dutyType = 'PERSONAL_LEAVE';
       entry.description = 'Personal Leave';
       const codeMatch = restOfLine.match(/\s+([A-Z0-9]+)\s*$/);
+      if (codeMatch) {
+        entry.code = codeMatch[1];
+      }
+    } else if (entry.dutyCode.match(/^SIM\w+\(T\)$/)) {
+      // Simulator duty with (T) suffix - e.g., SIM06CA(T)
+      entry.dutyType = 'SIMULATOR';
+      entry.description = `Simulator ${entry.dutyCode}`;
+      // Parse times if present
+      const timeMatch = restOfLine.match(/(\d{4})\s+(\d{4})/);
+      if (timeMatch) {
+        entry.signOn = timeMatch[1];
+        entry.signOff = timeMatch[2];
+      }
+      // Parse duty and credit hours
+      const hoursMatch = restOfLine.match(/(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/);
+      if (hoursMatch) {
+        entry.dutyHours = hoursMatch[1];
+        entry.creditHours = hoursMatch[2];
+      }
+      const codeMatch = restOfLine.match(/\s+([A-Z]{2}\d{2})\s*$/);
       if (codeMatch) {
         entry.code = codeMatch[1];
       }
@@ -541,16 +605,27 @@ class QantasRosterParser {
       let rawServiceToken;
       
       // Parse service (could be flight number or multiple flights)
-      const serviceMatch = restOfLine.match(/^\S+\s+(P?\d+(?:\/\d+)?)/);
+      // Service can be: flight numbers (123, 123/456), passive (P123), or alternate PAX (A780)
+      const serviceMatch = restOfLine.match(/^\S+\s+([PA]?\d+(?:\/[PA]?\d+)?)/);
       if (serviceMatch) {
         rawServiceToken = serviceMatch[1];
 
-        // Check for passive flights (starting with P) before normalization.
-        if (rawServiceToken.startsWith('P')) {
+        // Check for alternate PAX flights (starting with A)
+        if (rawServiceToken.startsWith('A') && rawServiceToken.match(/^A\d{3,4}$/)) {
           entry.passive = true;
+          // Strip the 'A' prefix and normalize as flight number
+          const flightNum = rawServiceToken.substring(1);
+          entry.service = this.normalizeFlightNumber(flightNum);
+          entry.description = `Alternate PAX ${entry.service}`;
         }
-
-        entry.service = this.normalizeService(rawServiceToken);
+        // Check for passive flights (starting with P) before normalization.
+        else if (rawServiceToken.startsWith('P')) {
+          entry.passive = true;
+          entry.service = this.normalizeService(rawServiceToken);
+        }
+        else {
+          entry.service = this.normalizeService(rawServiceToken);
+        }
       }
       
       // Parse times - look for 4-digit time patterns
