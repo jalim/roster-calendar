@@ -108,10 +108,12 @@ class ICSCalendarService {
   /**
    * Convert roster to ICS format
    * @param {Object} roster - Parsed roster data
+   * @param {Object} options - Optional configuration
+   * @param {number} options.payRate - Hourly pay rate for value calculations
    * @returns {Promise<string>} ICS calendar string
    */
-  async generateICS(roster) {
-    const events = this.convertRosterToEvents(roster);
+  async generateICS(roster, options = {}) {
+    const events = this.convertRosterToEvents(roster, options);
     
     return new Promise((resolve, reject) => {
       ics.createEvents(events, (error, value) => {
@@ -128,10 +130,12 @@ class ICSCalendarService {
    * Convert multiple rosters into a single ICS calendar string.
    * Events are merged and de-duplicated by UID.
    * @param {Array<Object>} rosters - Array of parsed roster objects
+   * @param {Object} options - Optional configuration
+   * @param {number} options.payRate - Hourly pay rate for value calculations
    * @returns {Promise<string>} ICS calendar string
    */
-  async generateICSForRosters(rosters) {
-    const events = this.convertRostersToEvents(rosters);
+  async generateICSForRosters(rosters, options = {}) {
+    const events = this.convertRostersToEvents(rosters, options);
 
     return new Promise((resolve, reject) => {
       ics.createEvents(events, (error, value) => {
@@ -147,14 +151,16 @@ class ICSCalendarService {
   /**
    * Convert multiple rosters to a merged set of events.
    * @param {Array<Object>} rosters
+   * @param {Object} options - Optional configuration
+   * @param {number} options.payRate - Hourly pay rate for value calculations
    * @returns {Array}
    */
-  convertRostersToEvents(rosters) {
+  convertRostersToEvents(rosters, options = {}) {
     const rosterList = Array.isArray(rosters) ? rosters.filter(Boolean) : [];
     const allEvents = [];
 
     for (const roster of rosterList) {
-      const events = this.convertRosterToEvents(roster);
+      const events = this.convertRosterToEvents(roster, options);
       for (const event of events) {
         allEvents.push(event);
       }
@@ -187,13 +193,16 @@ class ICSCalendarService {
   /**
    * Convert roster entries to calendar events
    * @param {Object} roster - Parsed roster data
+   * @param {Object} options - Optional configuration
+   * @param {number} options.payRate - Hourly pay rate for value calculations
    * @returns {Array} Array of event objects
    */
-  convertRosterToEvents(roster) {
+  convertRosterToEvents(roster, options = {}) {
     const events = [];
     const QantasRosterParser = require('../parsers/qantas-roster-parser');
     const parser = new QantasRosterParser();
     const period = parser.getRosterPeriod(roster);
+    const payRate = options.payRate;
 
     const hasDutyPatterns = Array.isArray(roster.dutyPatterns) && roster.dutyPatterns.length > 0;
 
@@ -237,7 +246,7 @@ class ICSCalendarService {
           : null;
         const matchingEntry = key ? flightEntryByKey.get(key) : null;
 
-        const dutyEvent = this.createDutyEventFromPattern(dutyPattern, roster.employee, matchingEntry);
+        const dutyEvent = this.createDutyEventFromPattern(dutyPattern, roster.employee, matchingEntry, payRate);
         if (dutyEvent) events.push(dutyEvent);
       }
 
@@ -254,7 +263,7 @@ class ICSCalendarService {
         continue;
       }
 
-      const event = this.createEventFromEntry(entry, month, year, roster.employee);
+      const event = this.createEventFromEntry(entry, month, year, roster.employee, payRate);
       if (event) events.push(event);
     }
 
@@ -486,7 +495,7 @@ class ICSCalendarService {
     return [utc.year, utc.month, utc.day, utc.hour, utc.minute];
   }
 
-  createDutyEventFromPattern(dutyPattern, employee, matchingEntry) {
+  createDutyEventFromPattern(dutyPattern, employee, matchingEntry, payRate) {
     if (!dutyPattern || !Array.isArray(dutyPattern.legs) || dutyPattern.legs.length === 0) return null;
 
     // Determine start date: use DATED token if present, otherwise first leg date
@@ -552,14 +561,25 @@ class ICSCalendarService {
     // Add DPC60 pay indicator when we can.
     // Prefer the roster-table duty/credit hours if available; otherwise infer duty hours from UTC times.
     let payLine = null;
+    let creditHours = null;
     if (matchingEntry && (matchingEntry.dutyHours || matchingEntry.creditHours)) {
       payLine = this.buildPayLine({ dutyHours: matchingEntry.dutyHours, creditHours: matchingEntry.creditHours });
+      creditHours = matchingEntry.creditHours;
     } else {
       const inferredDutyMinutes = Math.round(endDt.diff(startDt, 'minutes').minutes);
       const inferredDutyHours = this.formatMinutesAsHMM(inferredDutyMinutes);
       payLine = this.buildPayLine({ dutyHours: inferredDutyHours, creditHours: null });
     }
     if (payLine) description += `\n${payLine}`;
+
+    // Add duty value if pay rate is provided and we have credit hours
+    if (payRate && creditHours) {
+      const QantasRosterParser = require('../parsers/qantas-roster-parser');
+      const dutyValue = QantasRosterParser.calculateDutyValue(creditHours, payRate);
+      if (dutyValue !== null) {
+        description += `\nDuty Value: $${dutyValue.toFixed(2)} (at $${payRate.toFixed(2)}/hr)`;
+      }
+    }
 
     description += `\n\nTimezone (Report): ${reportTz}\nTimezone (Release): ${releaseTz}`;
 
@@ -652,9 +672,10 @@ class ICSCalendarService {
    * @param {number} month - Month number (0-11)
    * @param {number} year - Year
    * @param {Object} employee - Employee information
-   * @returns {Object|null} Event object or null if should be skipped
+   * @param {number} payRate - Optional hourly pay rate for value calculations
+   * @returns {Object|null} Event object or null
    */
-  createEventFromEntry(entry, month, year, employee) {
+  createEventFromEntry(entry, month, year, employee, payRate) {
     const day = entry.day;
     let title, description, startTime, endTime, duration, timezone;
 
@@ -666,7 +687,7 @@ class ICSCalendarService {
       case 'FLIGHT':
         title = entry.dutyCode ? `Duty: ${entry.dutyCode}` : 'Duty';
         if (entry.service) title += ` - ${entry.service}`;
-        description = this.buildFlightDescription(entry);
+        description = this.buildFlightDescription(entry, payRate);
         startTime = this.parseTime(entry.signOn);
         endTime = this.parseTime(entry.signOff);
         break;
@@ -782,7 +803,7 @@ class ICSCalendarService {
    * @param {Object} entry - Roster entry
    * @returns {string} Description text
    */
-  buildFlightDescription(entry) {
+  buildFlightDescription(entry, payRate) {
     let desc = `Duty: ${entry.dutyCode || 'Flight'}\n`;
     
     if (entry.service) {
@@ -813,6 +834,15 @@ class ICSCalendarService {
     if (entry.dutyType === 'FLIGHT' && entry.dutyHours) {
       const payLine = this.buildPayLine({ dutyHours: entry.dutyHours, creditHours: entry.creditHours });
       if (payLine) desc += `${payLine}\n`;
+    }
+
+    // Add duty value if pay rate is provided
+    if (payRate && entry.creditHours) {
+      const QantasRosterParser = require('../parsers/qantas-roster-parser');
+      const dutyValue = QantasRosterParser.calculateDutyValue(entry.creditHours, payRate);
+      if (dutyValue !== null) {
+        desc += `Duty Value: $${dutyValue.toFixed(2)} (at $${payRate.toFixed(2)}/hr)\n`;
+      }
     }
     
     if (entry.port) {

@@ -127,7 +127,17 @@ router.get('/:rosterId/calendar.ics', async (req, res) => {
     }
 
     const icsService = new ICSCalendarService();
-    const icsData = await icsService.generateICSForRosters(rosterBucket.rosters);
+    
+    // Look up pay rate for this pilot to include duty values
+    const options = {};
+    if (rosterBucket.employee && rosterBucket.employee.staffNo) {
+      const payRate = pilotDirectory.getPayRateForStaffNo(rosterBucket.employee.staffNo, process.env);
+      if (payRate !== null) {
+        options.payRate = payRate;
+      }
+    }
+    
+    const icsData = await icsService.generateICSForRosters(rosterBucket.rosters, options);
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="roster-${rosterId}.ics"`);
