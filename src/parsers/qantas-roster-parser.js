@@ -318,7 +318,8 @@ class QantasRosterParser {
       // Pattern Details flight line example:
       // 29Dec       768  PER  0709 MEL  1342  73H   3:33 ...
       // 16Jul P     937  BNE  1315 PER  1648  73H   0:00 ...
-      const match = line.match(/^\s*(\d{1,2}[A-Za-z]{3})\s+(P\s+)?(\d{1,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\b/);
+      // 07Nov A     780  PER  1554 MEL  2226  332   0:00 ... (alternate pax)
+      const match = line.match(/^\s*(\d{1,2}[A-Za-z]{3})\s+([PA]\s+)?(\d{1,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\b/);
       if (!match) continue;
 
       const flightNumber = this.normalizeFlightNumber(match[3]);
