@@ -772,6 +772,84 @@ class QantasRosterParser {
 
     return { startMonth, startYear, endMonth, endYear };
   }
+
+  /**
+   * Convert credit hours string (e.g., "7:30") to decimal hours (e.g., 7.5)
+   * @param {string} creditHours - Credit hours in HH:MM format
+   * @returns {number|null} - Decimal hours or null if invalid
+   */
+  static creditHoursToDecimal(creditHours) {
+    if (!creditHours || typeof creditHours !== 'string') return null;
+    
+    const match = creditHours.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    
+    const hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes >= 60 || hours >= 24) {
+      return null;
+    }
+    
+    return hours + (minutes / 60);
+  }
+
+  /**
+   * Calculate the monetary value of a duty based on credit hours and pay rate
+   * @param {string} creditHours - Credit hours in HH:MM format
+   * @param {number} payRate - Hourly pay rate
+   * @returns {number|null} - Duty value or null if calculation not possible
+   */
+  static calculateDutyValue(creditHours, payRate) {
+    if (!Number.isFinite(payRate) || payRate < 0) return null;
+    
+    const decimalHours = QantasRosterParser.creditHoursToDecimal(creditHours);
+    if (decimalHours === null) return null;
+    
+    return decimalHours * payRate;
+  }
+
+  /**
+   * Enrich roster entries with duty value calculations
+   * @param {Object} roster - Parsed roster object
+   * @param {number} payRate - Hourly pay rate
+   * @returns {Object} - Roster with dutyValue added to entries that have creditHours
+   */
+  static enrichRosterWithDutyValues(roster, payRate) {
+    if (!roster || typeof roster !== 'object') return roster;
+    if (!Number.isFinite(payRate) || payRate < 0) return roster;
+
+    const enrichedRoster = { ...roster };
+    
+    if (Array.isArray(enrichedRoster.entries)) {
+      enrichedRoster.entries = enrichedRoster.entries.map(entry => {
+        if (!entry || !entry.creditHours) return entry;
+        
+        const dutyValue = QantasRosterParser.calculateDutyValue(entry.creditHours, payRate);
+        if (dutyValue === null) return entry;
+        
+        return {
+          ...entry,
+          dutyValue: Math.round(dutyValue * 100) / 100 // Round to 2 decimal places
+        };
+      });
+    }
+    
+    // Calculate total duty value for the roster
+    if (Array.isArray(enrichedRoster.entries)) {
+      const totalValue = enrichedRoster.entries.reduce((sum, entry) => {
+        return sum + (entry.dutyValue || 0);
+      }, 0);
+      
+      enrichedRoster.summary = {
+        ...enrichedRoster.summary,
+        totalDutyValue: Math.round(totalValue * 100) / 100,
+        payRate: payRate
+      };
+    }
+
+    return enrichedRoster;
+  }
 }
 
 module.exports = QantasRosterParser;

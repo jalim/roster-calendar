@@ -188,4 +188,88 @@ describe('QantasRosterParser', () => {
     expect(period.startMonth).toBe(6); // July
     expect(period.startYear).toBe(2025);
   });
-});
+
+  describe('Duty Value Calculations', () => {
+    test('should convert credit hours to decimal hours', () => {
+      expect(QantasRosterParser.creditHoursToDecimal('7:30')).toBe(7.5);
+      expect(QantasRosterParser.creditHoursToDecimal('8:00')).toBe(8);
+      expect(QantasRosterParser.creditHoursToDecimal('10:15')).toBe(10.25);
+      expect(QantasRosterParser.creditHoursToDecimal('0:30')).toBe(0.5);
+      expect(QantasRosterParser.creditHoursToDecimal('12:45')).toBe(12.75);
+    });
+
+    test('should return null for invalid credit hours', () => {
+      expect(QantasRosterParser.creditHoursToDecimal(null)).toBe(null);
+      expect(QantasRosterParser.creditHoursToDecimal('')).toBe(null);
+      expect(QantasRosterParser.creditHoursToDecimal('invalid')).toBe(null);
+      expect(QantasRosterParser.creditHoursToDecimal('7:60')).toBe(null);
+      expect(QantasRosterParser.creditHoursToDecimal('25:00')).toBe(null);
+    });
+
+    test('should calculate duty value from credit hours and pay rate', () => {
+      expect(QantasRosterParser.calculateDutyValue('7:30', 100)).toBe(750);
+      expect(QantasRosterParser.calculateDutyValue('8:00', 150)).toBe(1200);
+      expect(QantasRosterParser.calculateDutyValue('10:15', 120)).toBe(1230);
+      expect(QantasRosterParser.calculateDutyValue('0:30', 100)).toBe(50);
+    });
+
+    test('should return null for invalid inputs in calculateDutyValue', () => {
+      expect(QantasRosterParser.calculateDutyValue('invalid', 100)).toBe(null);
+      expect(QantasRosterParser.calculateDutyValue('7:30', -50)).toBe(null);
+      expect(QantasRosterParser.calculateDutyValue('7:30', NaN)).toBe(null);
+      expect(QantasRosterParser.calculateDutyValue(null, 100)).toBe(null);
+    });
+
+    test('should enrich roster entries with duty values', () => {
+      const roster = parser.parse(sampleRosterText);
+      const enrichedRoster = QantasRosterParser.enrichRosterWithDutyValues(roster, 150);
+
+      expect(enrichedRoster.summary.payRate).toBe(150);
+      expect(enrichedRoster.summary.totalDutyValue).toBeDefined();
+      expect(enrichedRoster.summary.totalDutyValue).toBeGreaterThan(0);
+
+      // Check that entries with creditHours have dutyValue
+      const entriesWithCredit = enrichedRoster.entries.filter(e => e.creditHours);
+      expect(entriesWithCredit.length).toBeGreaterThan(0);
+      
+      entriesWithCredit.forEach(entry => {
+        expect(entry.dutyValue).toBeDefined();
+        expect(entry.dutyValue).toBeGreaterThan(0);
+      });
+    });
+
+    test('should calculate correct total duty value', () => {
+      const mockRoster = {
+        employee: { staffNo: '123456' },
+        entries: [
+          { day: 1, dutyCode: '8001A1', creditHours: '7:30' },
+          { day: 2, dutyCode: '8002A1', creditHours: '8:00' },
+          { day: 3, dutyCode: 'D/O' }, // No credit hours
+          { day: 4, dutyCode: '8003A1', creditHours: '6:15' }
+        ],
+        summary: {}
+      };
+
+      const enriched = QantasRosterParser.enrichRosterWithDutyValues(mockRoster, 100);
+      
+      // 7.5 * 100 = 750
+      // 8.0 * 100 = 800
+      // 6.25 * 100 = 625
+      // Total = 2175
+      expect(enriched.summary.totalDutyValue).toBe(2175);
+    });
+
+    test('should handle roster with no credit hours gracefully', () => {
+      const mockRoster = {
+        employee: { staffNo: '123456' },
+        entries: [
+          { day: 1, dutyCode: 'D/O' },
+          { day: 2, dutyCode: 'AV' }
+        ],
+        summary: {}
+      };
+
+      const enriched = QantasRosterParser.enrichRosterWithDutyValues(mockRoster, 100);
+      expect(enriched.summary.totalDutyValue).toBe(0);
+    });
+  });});
