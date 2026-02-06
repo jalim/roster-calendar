@@ -566,6 +566,25 @@ class QantasRosterParser {
       if (codeMatch) {
         entry.code = codeMatch[1];
       }
+    } else if (entry.dutyCode.match(/^EP\d+$/)) {
+      entry.dutyType = 'EMERGENCY_PROCEDURES';
+      entry.description = `Emergency Procedures ${entry.dutyCode}`;
+      // Parse times if present
+      const timeMatch = restOfLine.match(/(\d{4})\s+(\d{4})/);
+      if (timeMatch) {
+        entry.signOn = timeMatch[1];
+        entry.signOff = timeMatch[2];
+      }
+      // Parse duty and credit hours
+      const hoursMatch = restOfLine.match(/(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/);
+      if (hoursMatch) {
+        entry.dutyHours = hoursMatch[1];
+        entry.creditHours = hoursMatch[2];
+      }
+      const codeMatch = restOfLine.match(/\s+([A-Z0-9]+)\s*$/);
+      if (codeMatch) {
+        entry.code = codeMatch[1];
+      }
     } else if (entry.dutyCode.match(/^R\d+$/)) {
       entry.dutyType = 'RESERVE';
       entry.description = `Reserve Duty ${entry.dutyCode}`;
@@ -574,6 +593,16 @@ class QantasRosterParser {
       if (timeMatch) {
         entry.signOn = timeMatch[1];
         entry.signOff = timeMatch[2];
+      }
+      // Parse duty hours - reserve duties show duty hours but not credit hours in roster
+      const hoursMatch = restOfLine.match(/(\d{1,2}:\d{2})(\s+(\d{1,2}:\d{2}))?/);
+      if (hoursMatch) {
+        entry.dutyHours = hoursMatch[1];
+        // Reserve duties always attract 4:00 credit hours even if not shown in roster
+        entry.creditHours = hoursMatch[3] || '4:00';
+      } else {
+        // If no hours parsed at all, still apply the 4:00 credit default
+        entry.creditHours = '4:00';
       }
       const codeMatch = restOfLine.match(/\s+([A-Z0-9]+)\s*$/);
       if (codeMatch) {

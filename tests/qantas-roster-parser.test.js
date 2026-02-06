@@ -81,6 +81,39 @@ describe('QantasRosterParser', () => {
     expect(reserveEntry.dutyCode).toMatch(/^R\d+$/);
   });
 
+  test('should parse reserve duties with 4:00 credit hours default', () => {
+    const bp3735Path = path.join(__dirname, '../examples/roster-174423-bp-3735.txt');
+    const bp3735Text = fs.readFileSync(bp3735Path, 'utf-8');
+    const roster = parser.parse(bp3735Text);
+    
+    const reserveEntries = roster.entries.filter(e => e.dutyType === 'RESERVE');
+    expect(reserveEntries.length).toBeGreaterThan(0);
+    
+    // All reserve duties should have 4:00 credit hours
+    reserveEntries.forEach(entry => {
+      expect(entry.creditHours).toBe('4:00');
+      expect(entry.dutyHours).toBeDefined();
+    });
+  });
+
+  test('should identify EP* (Emergency Procedures) entries', () => {
+    const bp3735Path = path.join(__dirname, '../examples/roster-174423-bp-3735.txt');
+    const bp3735Text = fs.readFileSync(bp3735Path, 'utf-8');
+    const roster = parser.parse(bp3735Text);
+    
+    const epEntries = roster.entries.filter(e => e.dutyType === 'EMERGENCY_PROCEDURES');
+    expect(epEntries.length).toBeGreaterThan(0);
+    
+    const ep1Entry = epEntries.find(e => e.dutyCode === 'EP1');
+    expect(ep1Entry).toBeDefined();
+    expect(ep1Entry.description).toBe('Emergency Procedures EP1');
+    expect(ep1Entry.signOn).toBe('0850');
+    expect(ep1Entry.signOff).toBe('1640');
+    expect(ep1Entry.dutyHours).toBe('7:50');
+    expect(ep1Entry.creditHours).toBe('4:00');
+    expect(ep1Entry.code).toBe('AS20');
+  });
+
   test('should identify personal leave days', () => {
     const roster = parser.parse(sampleRosterText);
     const planningEntries = roster.entries.filter(e => e.dutyType === 'PERSONAL_LEAVE');
