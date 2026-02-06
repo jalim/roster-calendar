@@ -114,6 +114,42 @@ describe('QantasRosterParser', () => {
     expect(ep1Entry.code).toBe('AS20');
   });
 
+  test('should identify BL as Blank Day', () => {
+    const bp3735Path = path.join(__dirname, '../examples/roster-174423-bp-3735.txt');
+    const bp3735Text = fs.readFileSync(bp3735Path, 'utf-8');
+    const roster = parser.parse(bp3735Text);
+    
+    const blankDayEntries = roster.entries.filter(e => e.dutyType === 'BLANK_DAY');
+    expect(blankDayEntries.length).toBeGreaterThan(0);
+    
+    const blEntry = blankDayEntries.find(e => e.dutyCode === 'BL');
+    expect(blEntry).toBeDefined();
+    expect(blEntry.description).toBe('Blank Day');
+    expect(blEntry.code).toBe('AW01');
+  });
+
+  test('should handle rosters spanning multiple months with same day numbers', () => {
+    const bp3735Path = path.join(__dirname, '../examples/roster-174423-bp-3735.txt');
+    const bp3735Text = fs.readFileSync(bp3735Path, 'utf-8');
+    const roster = parser.parse(bp3735Text);
+    
+    // Roster spans Feb 23 - Mar 23, both have day number 23
+    const day23Entries = roster.entries.filter(e => e.day === 23);
+    expect(day23Entries.length).toBe(2);
+    
+    // First should be Feb 23 (month 1) with BL
+    const feb23 = day23Entries.find(e => e.month === 1);
+    expect(feb23).toBeDefined();
+    expect(feb23.dutyCode).toBe('BL');
+    expect(feb23.year).toBe(2026);
+    
+    // Second should be Mar 23 (month 2) with flight
+    const mar23 = day23Entries.find(e => e.month === 2);
+    expect(mar23).toBeDefined();
+    expect(mar23.dutyCode).toBe('8252');
+    expect(mar23.year).toBe(2026);
+  });
+
   test('should identify personal leave days', () => {
     const roster = parser.parse(sampleRosterText);
     const planningEntries = roster.entries.filter(e => e.dutyType === 'PERSONAL_LEAVE');

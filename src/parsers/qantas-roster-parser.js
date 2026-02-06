@@ -420,20 +420,13 @@ class QantasRosterParser {
           lastFlightDutyCode = null;
         }
 
-        // Check if this day already exists in roster.entries
-        // If it does and this entry has a duty code, replace the previous entry
-        // This handles cases where rosters have correction lines (e.g., simulator sessions)
-        const existingIndex = roster.entries.findIndex(e => e.day === entry.day);
-        if (existingIndex !== -1 && entry.dutyCode && entry.dutyCode !== roster.entries[existingIndex].dutyCode) {
-          // Replace the existing entry with this corrected one
-          roster.entries[existingIndex] = entry;
-        } else if (existingIndex === -1) {
-          // No duplicate - add normally
-          roster.entries.push(entry);
-        }
-        // If existingIndex !== -1 but same dutyCode, skip (it's a true duplicate)
+        roster.entries.push(entry);
       }
     }
+    
+    // Assign month/year to entries and handle month rollovers
+    // This supports rosters spanning multiple months (e.g., Feb 23 - Mar 23)
+    this.assignMonthYearToEntries(roster);
   }
 
   /**
@@ -623,8 +616,8 @@ class QantasRosterParser {
         entry.code = codeMatch[1];
       }
     } else if (entry.dutyCode === 'BL') {
-      entry.dutyType = 'BLOCK_LEAVE';
-      entry.description = 'Block Leave';
+      entry.dutyType = 'BLANK_DAY';
+      entry.description = 'Blank Day';
       const codeMatch = restOfLine.match(/\s+([A-Z0-9]+)\s*$/);
       if (codeMatch) {
         entry.code = codeMatch[1];
@@ -691,6 +684,35 @@ class QantasRosterParser {
     }
 
     return entry;
+  }
+
+  /**
+   * Assign month and year to each roster entry
+   * Handles rosters that span multiple months (e.g., Feb 23 - Mar 23)
+   * @param {Object} roster - Parsed roster object
+   */
+  assignMonthYearToEntries(roster) {
+    if (roster.entries.length === 0) return;
+
+    const period = this.getRosterPeriod(roster);
+    let currentMonth = period.startMonth;
+    let currentYear = period.startYear;
+
+    const firstDay = roster.entries[0].day;
+    let previousDay = firstDay;
+
+    for (const entry of roster.entries) {
+      // Detect month rollover: if day number decreases significantly, we've moved to next month
+      // Use threshold to distinguish rollover from legitimate decreases within same month
+      if (entry.day < previousDay && previousDay - entry.day > 7) {
+        currentMonth = (currentMonth + 1) % 12;
+        if (currentMonth === 0) currentYear += 1;
+      }
+
+      entry.month = currentMonth;
+      entry.year = currentYear;
+      previousDay = entry.day;
+    }
   }
 
   /**

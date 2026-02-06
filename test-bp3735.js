@@ -12,7 +12,8 @@ result.entries.forEach((e, i) => {
   const credit = e.creditHours ? ` Credit: ${e.creditHours}` : '';
   const duty = e.dutyHours ? ` Duty: ${e.dutyHours}` : '';
   const times = e.signOn && e.signOff ? ` (${e.signOn}-${e.signOff})` : '';
-  console.log(`${i}: Day ${e.day} ${e.dayOfWeek} - ${e.dutyCode || 'NO CODE'} - ${e.dutyType}${times}${duty}${credit}`);
+  const monthYear = e.month !== undefined && e.year !== undefined ? ` [${e.month + 1}/${e.year}]` : '';
+  console.log(`${i}: Day ${e.day} ${e.dayOfWeek}${monthYear} - ${e.dutyCode || 'NO CODE'} - ${e.dutyType}${times}${duty}${credit}`);
 });
 
 console.log('\n=== SPECIFIC ISSUE VALIDATION ===');
@@ -60,6 +61,18 @@ result.dutyPatterns.forEach((p, i) => {
 console.log('\n=== SUMMARY ===');
 const epEntries = result.entries.filter(e => e.dutyType === 'EMERGENCY_PROCEDURES');
 const reserveEntries = result.entries.filter(e => e.dutyType === 'RESERVE');
+const blankDayEntries = result.entries.filter(e => e.dutyType === 'BLANK_DAY');
+const day23Entries = result.entries.filter(e => e.day === 23);
 console.log('Emergency Procedures entries:', epEntries.length);
 console.log('Reserve duty entries:', reserveEntries.length);
+console.log('Blank Day entries:', blankDayEntries.length);
+console.log('Day 23 entries (should be 2 - Feb and Mar):', day23Entries.length);
 console.log('All reserve duties have 4:00 credit:', reserveEntries.every(e => e.creditHours === '4:00'));
+
+if (day23Entries.length === 2) {
+  console.log('\n✓ Successfully parsing both Feb 23 and Mar 23:');
+  day23Entries.forEach(e => {
+    const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][e.month];
+    console.log(`  - ${e.day} ${monthName} ${e.year}: ${e.dutyCode} (${e.dutyType})`);
+  });
+}
