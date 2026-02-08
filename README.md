@@ -91,14 +91,49 @@ Use the ICS URL in your calendar application:
 - Google Calendar: Add calendar → From URL
 - Outlook: Open calendar → Add calendar → From internet
 
+**Important:** Calendar subscriptions now require authentication using HTTP Basic Auth. When subscribing, use your staff number as the username and your password.
+
+## Password Protection (CalDAV Authentication)
+
+Calendar access is protected using HTTP Basic Authentication. Each pilot must set a password before they can access their calendar.
+
+### Setting Your Password
+
+```bash
+curl -X POST http://localhost:3000/api/roster/password \
+  -H "Content-Type: application/json" \
+  -d '{"staffNo": "123456", "password": "your-secure-password"}'
+```
+
+### Accessing Your Calendar
+
+Once your password is set, access your calendar using HTTP Basic Authentication:
+
+```bash
+# Download with authentication
+curl -u 123456:your-password http://localhost:3000/api/roster/123456/calendar.ics -o roster.ics
+```
+
+When subscribing in calendar applications, you'll be prompted for:
+- **Username:** Your staff number (e.g., 123456)
+- **Password:** The password you set
+
+### Security Notes
+
+- Passwords are stored as bcrypt hashes (salt rounds: 12)
+- Minimum password length: 6 characters
+- Each pilot can only access their own roster
+- Use HTTPS in production to protect credentials in transit
+
 ## API Endpoints
 
 - `GET /` - Service information
 - `GET /health` - Health check
 - `POST /api/roster/upload` - Upload roster file (multipart/form-data)
 - `POST /api/roster/text` - Upload roster as text (text/plain)
+- `POST /api/roster/password` - Set/update password for a staff number
 - `GET /api/roster/:rosterId` - Get roster details
-- `GET /api/roster/:rosterId/calendar.ics` - Download ICS calendar
+- `GET /api/roster/:rosterId/calendar.ics` - Download ICS calendar (**requires authentication**)
 
 ### Debug endpoints (optional)
 
@@ -110,6 +145,8 @@ ROSTER_DEBUG_ENDPOINTS=true
 
 - `GET /api/roster/_debug/rosters` - List rosterIds currently in memory
 - `POST /api/roster/_debug/email/poll` - Trigger an inbox poll immediately (runs inside the server)
+- `GET /api/roster/_debug/credentials` - List all staff numbers with passwords set
+- `DELETE /api/roster/_debug/credentials/:staffNo` - Delete password for a staff number
 
 ## Roster Format
 
@@ -333,6 +370,9 @@ PORT=3000
 # Persist ingested rosters to disk (survives restarts)
 ROSTER_PERSIST_ENABLED=true
 ROSTER_PERSIST_PATH=./data/roster-store.json
+
+# CalDAV Authentication - Password credentials storage
+ROSTER_CREDENTIALS_PATH=./data/credentials.json
 ```
 
 ## License

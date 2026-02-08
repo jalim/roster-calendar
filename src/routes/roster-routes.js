@@ -8,6 +8,8 @@ const ICSCalendarService = require('../services/ics-calendar-service');
 const rosterStore = require('../services/roster-store');
 const { pollInboxOnce } = require('../services/inbox-roster-poller');
 const pilotDirectory = require('../services/pilot-directory');
+const { authenticateCalDAV } = require('../middleware/caldav-auth');
+const authService = require('../services/auth-service');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -59,6 +61,92 @@ router.delete('/_debug/pilot-emails/:staffNo', (req, res) => {
     return res.json({ success: true, removed });
   } catch (err) {
     return res.status(400).json({ success: false, error: err && err.message ? err.message : 'Failed to delete email' });
+  }
+});
+
+/**
+ * Set password for a staff number
+ * POST /api/roster/password
+ * Body: { staffNo: string, password: string }
+ */
+router.post('/password', async (req, res) => {
+  try {
+    const { staffNo, password } = req.body || {};
+    
+    if (!staffNo) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Staff number is required' 
+      });
+    }
+    
+    if (!password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password is required' 
+      });
+    }
+
+    const result = await authService.setPasswordForStaffNo(staffNo, password, process.env);
+    
+    return res.json({
+      success: true,
+      staffNo: result.staffNo,
+      message: result.created 
+        ? 'Password created successfully' 
+        : 'Password updated successfully'
+    });
+  } catch (err) {
+    return res.status(400).json({ 
+      success: false, 
+      error: err && err.message ? err.message : 'Failed to set password' 
+    });
+  }
+});
+
+/**
+ * Debug endpoint: List all staff numbers with credentials
+ * GET /api/roster/_debug/credentials
+ */
+router.get('/_debug/credentials', (req, res) => {
+  if (!debugEnabled()) return res.status(404).json({ error: 'Not found' });
+  
+  try {
+    const staffNumbers = authService.listCredentialStaffNumbers(process.env);
+    return res.json({ 
+      success: true, 
+      count: staffNumbers.length,
+      staffNumbers 
+    });
+  } catch (err) {
+    return res.status(500).json({ 
+      success: false, 
+      error: err && err.message ? err.message : 'Failed to list credentials' 
+    });
+  }
+});
+
+/**
+ * Debug endpoint: Delete credentials for a staff number
+ * DELETE /api/roster/_debug/credentials/:staffNo
+ */
+router.delete('/_debug/credentials/:staffNo', (req, res) => {
+  if (!debugEnabled()) return res.status(404).json({ error: 'Not found' });
+  
+  try {
+    const { staffNo } = req.params;
+    const deleted = authService.deleteCredentials(staffNo, process.env);
+    
+    return res.json({ 
+      success: true, 
+      deleted,
+      message: deleted ? 'Credentials deleted' : 'No credentials found for this staff number'
+    });
+  } catch (err) {
+    return res.status(500).json({ 
+      success: false, 
+      error: err && err.message ? err.message : 'Failed to delete credentials' 
+    });
   }
 });
 
@@ -116,14 +204,23 @@ router.post('/text', express.text({ type: 'text/plain', limit: '1mb' }), async (
 /**
  * Get ICS calendar for a roster
  * GET /api/roster/:rosterId/calendar.ics
+ * Requires HTTP Basic Authentication with staff number and password
  */
-router.get('/:rosterId/calendar.ics', async (req, res) => {
+router.get('/:rosterId/calendar.ics', authenticateCalDAV, async (req, res) => {
   try {
     const { rosterId } = req.params;
     const rosterBucket = rosterStore.getRosterBucket(rosterId);
 
     if (!rosterBucket) {
       return res.status(404).json({ error: 'Roster not found' });
+    }
+
+    // Verify that the authenticated user is accessing their own roster
+    if (req.authenticatedStaffNo !== rosterId) {
+      return res.status(403).json({ 
+        error: 'Access denied',
+        message: 'You can only access your own roster'
+      });
     }
 
     const icsService = new ICSCalendarService();
