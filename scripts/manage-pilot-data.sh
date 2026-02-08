@@ -8,6 +8,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 PILOT_DIR="$PROJECT_ROOT/src/services/pilot-directory.js"
+AUTH_SERVICE="$PROJECT_ROOT/src/services/auth-service.js"
 
 # Colors for output
 RED='\033[0;31m'
@@ -77,6 +78,103 @@ validate_pay_rate() {
         return 1
     fi
     return 0
+}
+
+# Function to validate password
+validate_password() {
+    local password="$1"
+    if [[ -z "$password" ]]; then
+        print_error "Password is required"
+        return 1
+    fi
+    if [[ ${#password} -lt 6 ]]; then
+        print_error "Password must be at least 6 characters long"
+        return 1
+    fi
+    return 0
+}
+
+# Function to set password
+set_password() {
+    local staff_no="$1"
+    local password="$2"
+    
+    validate_staff_no "$staff_no" || return 1
+    validate_password "$password" || return 1
+    
+    node -e "
+        const authService = require('$AUTH_SERVICE');
+        (async () => {
+            try {
+                const result = await authService.setPasswordForStaffNo('$staff_no', '$password');
+                if (result.created) {
+                    console.log('Password created for Staff No $staff_no');
+                } else {
+                    console.log('Password updated for Staff No $staff_no');
+                }
+            } catch (err) {
+                console.error('Error:', err.message);
+                process.exit(1);
+            }
+        })();
+    " && print_success "Password saved successfully"
+}
+
+# Function to check if password is set
+has_password() {
+    local staff_no="$1"
+    
+    validate_staff_no "$staff_no" || return 1
+    
+    node -e "
+        const authService = require('$AUTH_SERVICE');
+        const hasPassword = authService.hasCredentials('$staff_no');
+        if (hasPassword) {
+            console.log('Staff No $staff_no: Password is set');
+        } else {
+            console.log('Staff No $staff_no: No password set');
+            process.exit(1);
+        }
+    "
+}
+
+# Function to delete password
+delete_password() {
+    local staff_no="$1"
+    
+    validate_staff_no "$staff_no" || return 1
+    
+    node -e "
+        const authService = require('$AUTH_SERVICE');
+        const deleted = authService.deleteCredentials('$staff_no');
+        if (deleted) {
+            console.log('Password deleted for Staff No $staff_no');
+        } else {
+            console.log('No password found for Staff No $staff_no');
+            process.exit(1);
+        }
+    " && print_success "Password deleted successfully"
+}
+
+# Function to list all staff numbers with passwords
+list_passwords() {
+    print_info "Listing all staff numbers with passwords..."
+    node -e "
+        const authService = require('$AUTH_SERVICE');
+        const staffNumbers = authService.listCredentialStaffNumbers();
+        if (staffNumbers.length === 0) {
+            console.log('No passwords found');
+        } else {
+            console.log('');
+            console.log('Staff No    Status');
+            console.log('─'.repeat(60));
+            staffNumbers.forEach(staffNo => {
+                console.log(staffNo.padEnd(12) + 'Password set');
+            });
+            console.log('─'.repeat(60));
+            console.log('Total: ' + staffNumbers.length + ' staff member(s) with passwords');
+        }
+    "
 }
 
 # Function to set email
@@ -304,6 +402,7 @@ delete_pilot() {
     
     local deleted_email=false
     local deleted_rate=false
+    local deleted_password=false
     
     if delete_email "$staff_no" 2>/dev/null; then
         deleted_email=true
@@ -313,7 +412,11 @@ delete_pilot() {
         deleted_rate=true
     fi
     
-    if [[ "$deleted_email" == true || "$deleted_rate" == true ]]; then
+    if delete_password "$staff_no" 2>/dev/null; then
+        deleted_password=true
+    fi
+    
+    if [[ "$deleted_email" == true || "$deleted_rate" == true || "$deleted_password" == true ]]; then
         print_success "All data deleted for Staff No $staff_no"
     else
         print_warning "No data found for Staff No $staff_no"
@@ -341,9 +444,15 @@ Commands:
     rate delete <staff-no>             Delete pay rate for a pilot
     rate list                          List all pilot pay rates
 
+  Password Management:
+    password set <staff-no> <password> Set password for calendar access
+    password check <staff-no>          Check if password is set
+    password delete <staff-no>         Delete password for a pilot
+    password list                      List all staff with passwords
+
   Combined Management:
     pilot set <staff-no> <email> <rate>  Set both email and pay rate
-    pilot delete <staff-no>              Delete all data for a pilot
+    pilot delete <staff-no>              Delete all data for a pilot (email, rate, password)
     pilot list                           List all pilot data
 
   General:
@@ -357,15 +466,20 @@ Examples:
   # Set pay rate for a pilot
   $0 rate set 174423 150.50
 
+  # Set password for calendar access
+  $0 password set 174423 secure-password
+
   # Set both email and pay rate
   $0 pilot set 174423 pilot@example.com 150.50
 
   # Get pilot information
   $0 email get 174423
   $0 rate get 174423
+  $0 password check 174423
 
   # List all data
   $0 list
+  $0 password list
 
   # Delete a pilot's email
   $0 email delete 174423
@@ -444,6 +558,37 @@ main() {
                     ;;
                 *)
                     print_error "Unknown rate subcommand: $subcommand"
+                    show_usage
+                    exit 1
+                    ;;
+            esac
+            ;;
+        password|pass)
+            if [[ $# -eq 0 ]]; then
+                print_error "Password subcommand required"
+                show_usage
+                exit 1
+            fi
+            local subcommand="$1"
+            shift
+            case "$subcommand" in
+                set)
+                    [[ $# -eq 2 ]] || { print_error "Usage: password set <staff-no> <password>"; exit 1; }
+                    set_password "$1" "$2"
+                    ;;
+                check|has|get)
+                    [[ $# -eq 1 ]] || { print_error "Usage: password check <staff-no>"; exit 1; }
+                    has_password "$1"
+                    ;;
+                delete)
+                    [[ $# -eq 1 ]] || { print_error "Usage: password delete <staff-no>"; exit 1; }
+                    delete_password "$1"
+                    ;;
+                list)
+                    list_passwords
+                    ;;
+                *)
+                    print_error "Unknown password subcommand: $subcommand"
                     show_usage
                     exit 1
                     ;;

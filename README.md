@@ -24,13 +24,52 @@ This service allows pilots to send their monthly roster text file from the Qanta
 npm install
 ```
 
+## Quick Start
+
+### 1. Start the Server
+
+```bash
+npm start
+```
+
+The server will run on port 3000 by default (configurable via `PORT` environment variable).
+
+### 2. Upload Your Roster
+
+```bash
+curl -X POST http://localhost:3000/api/roster/text \
+  -H "Content-Type: text/plain" \
+  --data-binary "@your-roster.txt"
+```
+
+### 3. Set Your Password
+
+```bash
+curl -X POST http://localhost:3000/api/roster/password \
+  -H "Content-Type: application/json" \
+  -d '{"staffNo": "YOUR_STAFF_NUMBER", "password": "your-secure-password"}'
+```
+
+### 4. Subscribe to Your Calendar
+
+In your calendar application (Apple Calendar, Google Calendar, Outlook):
+- Add a new calendar subscription
+- URL: `http://localhost:3000/api/roster/calendar.ics`
+- When prompted for credentials:
+  - **Username**: Your staff number
+  - **Password**: The password you set in step 3
+
+**Note**: In production, use HTTPS instead of HTTP for secure credential transmission.
+
 ## Usage
 
 ### Multiple roster uploads (append)
 
 If you upload multiple rosters for the same staff number (e.g. June, then July, then August), the service keeps them all and serves a single combined calendar at:
 
-`/api/roster/<staffNo>/calendar.ics`
+`/api/roster/calendar.ics`
+
+The calendar URL is the same for all users - authentication determines which roster is displayed.
 
 Re-uploading the exact same roster text won’t duplicate events (events are de-duplicated by stable UID).
 
@@ -73,14 +112,15 @@ Response:
     "base": "PER"
   },
   "entriesCount": 30,
-  "icsUrl": "/api/roster/000000/calendar.ics"
+  "icsUrl": "/api/roster/calendar.ics"
 }
 ```
 
 ### Download ICS Calendar
 
 ```bash
-curl http://localhost:3000/api/roster/000000/calendar.ics -o roster.ics
+# Requires authentication with your staff number and password
+curl -u 000000:your-password http://localhost:3000/api/roster/calendar.ics -o roster.ics
 ```
 
 ### Subscribe to Calendar
@@ -91,14 +131,61 @@ Use the ICS URL in your calendar application:
 - Google Calendar: Add calendar → From URL
 - Outlook: Open calendar → Add calendar → From internet
 
+**Important:** Calendar subscriptions now require authentication using HTTP Basic Auth. When subscribing, use your staff number as the username and your password.
+
+## Password Protection (CalDAV Authentication)
+
+Calendar access is protected using HTTP Basic Authentication. Each pilot must set a password before they can access their calendar.
+
+### Setting Your Password
+
+**First time (initial password creation):**
+```bash
+curl -X POST http://localhost:3000/api/roster/password \
+  -H "Content-Type: application/json" \
+  -d '{"staffNo": "123456", "password": "your-secure-password"}'
+```
+
+**Updating your password (requires authentication with current password):**
+```bash
+curl -X POST http://localhost:3000/api/roster/password \
+  -u 123456:current-password \
+  -H "Content-Type: application/json" \
+  -d '{"staffNo": "123456", "password": "new-secure-password"}'
+```
+
+### Accessing Your Calendar
+
+Once your password is set, access your calendar using HTTP Basic Authentication:
+
+```bash
+# Download with authentication (same URL for all users - auth determines which roster)
+curl -u 123456:your-password http://localhost:3000/api/roster/calendar.ics -o roster.ics
+```
+
+When subscribing in calendar applications, you'll be prompted for:
+- **Username:** Your staff number (e.g., 123456)
+- **Password:** The password you set
+- **URL:** `http://localhost:3000/api/roster/calendar.ics` (same for all users)
+
+### Security Notes
+
+- Passwords are stored as bcrypt hashes (salt rounds: 12)
+- Minimum password length: 6 characters
+- Each pilot can only access their own roster
+- **Password updates require authentication**: You must provide your current password to change it
+- **Initial password creation is open**: Anyone can set a password for a staff number that doesn't have one yet (consider restricting this in production)
+- Use HTTPS in production to protect credentials in transit
+
 ## API Endpoints
 
 - `GET /` - Service information
 - `GET /health` - Health check
 - `POST /api/roster/upload` - Upload roster file (multipart/form-data)
 - `POST /api/roster/text` - Upload roster as text (text/plain)
+- `POST /api/roster/password` - Set/update password for a staff number
 - `GET /api/roster/:rosterId` - Get roster details
-- `GET /api/roster/:rosterId/calendar.ics` - Download ICS calendar
+- `GET /api/roster/calendar.ics` - Download ICS calendar (**requires authentication**, uses auth to determine which roster to serve)
 
 ### Debug endpoints (optional)
 
@@ -110,6 +197,8 @@ ROSTER_DEBUG_ENDPOINTS=true
 
 - `GET /api/roster/_debug/rosters` - List rosterIds currently in memory
 - `POST /api/roster/_debug/email/poll` - Trigger an inbox poll immediately (runs inside the server)
+- `GET /api/roster/_debug/credentials` - List all staff numbers with passwords set
+- `DELETE /api/roster/_debug/credentials/:staffNo` - Delete password for a staff number
 
 ## Roster Format
 
@@ -307,14 +396,19 @@ roster-calendar/
 │   ├── parsers/
 │   │   └── qantas-roster-parser.js # Roster parser
 │   ├── services/
+│   │   ├── auth-service.js         # Password hashing and authentication
 │   │   ├── ics-calendar-service.js # ICS generation
 │   │   ├── inbox-roster-poller.js  # IMAP polling (optional)
 │   │   ├── roster-store.js         # Shared in-memory roster store
 │   │   ├── timezone-service.js     # Timezone mappings
 │   │   └── email-service.js        # Email handling (framework)
+│   ├── middleware/
+│   │   └── caldav-auth.js          # HTTP Basic Auth middleware
 │   └── routes/
 │       └── roster-routes.js        # API routes
 ├── tests/
+│   ├── auth-service.test.js        # Authentication tests
+│   ├── caldav-auth.test.js         # Auth middleware tests
 │   ├── qantas-roster-parser.test.js
 │   ├── ics-calendar-service.test.js
 │   └── timezone-service.test.js
@@ -333,6 +427,9 @@ PORT=3000
 # Persist ingested rosters to disk (survives restarts)
 ROSTER_PERSIST_ENABLED=true
 ROSTER_PERSIST_PATH=./data/roster-store.json
+
+# CalDAV Authentication - Password credentials storage
+ROSTER_CREDENTIALS_PATH=./data/credentials.json
 ```
 
 ## License

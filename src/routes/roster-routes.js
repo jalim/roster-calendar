@@ -8,6 +8,8 @@ const ICSCalendarService = require('../services/ics-calendar-service');
 const rosterStore = require('../services/roster-store');
 const { pollInboxOnce } = require('../services/inbox-roster-poller');
 const pilotDirectory = require('../services/pilot-directory');
+const { authenticateCalDAV } = require('../middleware/caldav-auth');
+const authService = require('../services/auth-service');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -63,6 +65,133 @@ router.delete('/_debug/pilot-emails/:staffNo', (req, res) => {
 });
 
 /**
+ * Set password for a staff number
+ * POST /api/roster/password
+ * Body: { staffNo: string, password: string }
+ * 
+ * Security: 
+ * - Initial password creation (when no password exists) is allowed without authentication
+ * - Password updates require authentication as the same staff number
+ */
+router.post('/password', async (req, res) => {
+  try {
+    const { staffNo, password } = req.body || {};
+    
+    if (!staffNo) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Staff number is required' 
+      });
+    }
+    
+    if (!password) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Password is required' 
+      });
+    }
+
+    // Check if password already exists for this staff number
+    const hasExistingPassword = authService.hasCredentials(staffNo, process.env);
+    
+    if (hasExistingPassword) {
+      // Password exists - require authentication
+      const auth = require('basic-auth');
+      const credentials = auth(req);
+      
+      if (!credentials || !credentials.name || !credentials.pass) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="Roster Calendar"');
+        return res.status(401).json({ 
+          error: 'Authentication required',
+          message: 'You must authenticate with your current password to update it'
+        });
+      }
+      
+      // Verify current credentials
+      const isValid = await authService.verifyCredentials(credentials.name, credentials.pass, process.env);
+      
+      if (!isValid) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="Roster Calendar"');
+        return res.status(401).json({ 
+          error: 'Authentication failed',
+          message: 'Invalid current password'
+        });
+      }
+      
+      // Verify user is updating their own password
+      if (credentials.name !== staffNo) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied',
+          message: 'You can only update your own password'
+        });
+      }
+    }
+
+    const result = await authService.setPasswordForStaffNo(staffNo, password, process.env);
+    
+    return res.json({
+      success: true,
+      staffNo: result.staffNo,
+      message: result.created 
+        ? 'Password created successfully' 
+        : 'Password updated successfully'
+    });
+  } catch (err) {
+    return res.status(400).json({ 
+      success: false, 
+      error: err && err.message ? err.message : 'Failed to set password' 
+    });
+  }
+});
+
+/**
+ * Debug endpoint: List all staff numbers with credentials
+ * GET /api/roster/_debug/credentials
+ */
+router.get('/_debug/credentials', (req, res) => {
+  if (!debugEnabled()) return res.status(404).json({ error: 'Not found' });
+  
+  try {
+    const staffNumbers = authService.listCredentialStaffNumbers(process.env);
+    return res.json({ 
+      success: true, 
+      count: staffNumbers.length,
+      staffNumbers 
+    });
+  } catch (err) {
+    return res.status(500).json({ 
+      success: false, 
+      error: err && err.message ? err.message : 'Failed to list credentials' 
+    });
+  }
+});
+
+/**
+ * Debug endpoint: Delete credentials for a staff number
+ * DELETE /api/roster/_debug/credentials/:staffNo
+ */
+router.delete('/_debug/credentials/:staffNo', (req, res) => {
+  if (!debugEnabled()) return res.status(404).json({ error: 'Not found' });
+  
+  try {
+    const { staffNo } = req.params;
+    const deleted = authService.deleteCredentials(staffNo, process.env);
+    
+    return res.json({ 
+      success: true, 
+      deleted,
+      message: deleted ? 'Credentials deleted' : 'No credentials found for this staff number'
+    });
+  } catch (err) {
+    return res.status(500).json({ 
+      success: false, 
+      error: err && err.message ? err.message : 'Failed to delete credentials' 
+    });
+  }
+});
+
+/**
  * Upload a roster file
  * POST /api/roster/upload
  */
@@ -80,7 +209,7 @@ router.post('/upload', upload.single('roster'), async (req, res) => {
       rosterId: rosterId,
       employee: roster.employee,
       entriesCount: roster.entries.length,
-      icsUrl: `/api/roster/${rosterId}/calendar.ics`
+      icsUrl: `/api/roster/calendar.ics`
     });
   } catch (error) {
     console.error('Error processing roster:', error);
@@ -105,7 +234,7 @@ router.post('/text', express.text({ type: 'text/plain', limit: '1mb' }), async (
       rosterId: rosterId,
       employee: roster.employee,
       entriesCount: roster.entries.length,
-      icsUrl: `/api/roster/${rosterId}/calendar.ics`
+      icsUrl: `/api/roster/calendar.ics`
     });
   } catch (error) {
     console.error('Error processing roster:', error);
@@ -114,12 +243,14 @@ router.post('/text', express.text({ type: 'text/plain', limit: '1mb' }), async (
 });
 
 /**
- * Get ICS calendar for a roster
- * GET /api/roster/:rosterId/calendar.ics
+ * Get ICS calendar for authenticated user's roster
+ * GET /api/roster/calendar.ics
+ * Requires HTTP Basic Authentication - staff number from auth determines which roster to serve
  */
-router.get('/:rosterId/calendar.ics', async (req, res) => {
+router.get('/calendar.ics', authenticateCalDAV, async (req, res) => {
   try {
-    const { rosterId } = req.params;
+    // Use authenticated staff number to determine which roster to serve
+    const rosterId = req.authenticatedStaffNo;
     const rosterBucket = rosterStore.getRosterBucket(rosterId);
 
     if (!rosterBucket) {
