@@ -6,11 +6,20 @@ This application implements HTTP Basic Authentication for CalDAV calendar access
 
 ### Implemented Security Features
 
-✅ **Password Hashing**: All passwords are hashed using bcrypt with 12 salt rounds before storage
-✅ **Minimum Password Length**: Enforced 6-character minimum password length
-✅ **Access Control**: Users can only access their own rosters (staff number verification)
-✅ **Secure Storage**: Credentials stored in `data/credentials.json` (excluded from git via `.gitignore`)
+✅ **Password Hashing**: All passwords are hashed using bcrypt with 12 salt rounds before storage  
+✅ **Minimum Password Length**: Enforced 6-character minimum password length  
+✅ **Access Control**: Users can only access their own rosters (staff number verification)  
+✅ **Password Update Protection**: Updating an existing password requires authentication with the current password  
+✅ **Secure Storage**: Credentials stored in `data/credentials.json` (excluded from git via `.gitignore`)  
 ✅ **No Plaintext Passwords**: Passwords are never stored in plaintext
+
+### Security Considerations
+
+⚠️ **Initial Password Creation**: Currently, anyone can set a password for a staff number that doesn't have one yet (no authentication required for first-time password creation). This allows users to self-register but could be abused. Consider one of these approaches for production:
+- Require an admin API key or token for password creation
+- Pre-populate passwords for known staff numbers
+- Use a one-time setup token sent via email
+- Restrict password creation to authenticated admin users only
 
 ### Security Recommendations
 

@@ -68,6 +68,10 @@ router.delete('/_debug/pilot-emails/:staffNo', (req, res) => {
  * Set password for a staff number
  * POST /api/roster/password
  * Body: { staffNo: string, password: string }
+ * 
+ * Security: 
+ * - Initial password creation (when no password exists) is allowed without authentication
+ * - Password updates require authentication as the same staff number
  */
 router.post('/password', async (req, res) => {
   try {
@@ -85,6 +89,43 @@ router.post('/password', async (req, res) => {
         success: false, 
         error: 'Password is required' 
       });
+    }
+
+    // Check if password already exists for this staff number
+    const hasExistingPassword = authService.hasCredentials(staffNo, process.env);
+    
+    if (hasExistingPassword) {
+      // Password exists - require authentication
+      const auth = require('basic-auth');
+      const credentials = auth(req);
+      
+      if (!credentials || !credentials.name || !credentials.pass) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="Roster Calendar"');
+        return res.status(401).json({ 
+          error: 'Authentication required',
+          message: 'You must authenticate with your current password to update it'
+        });
+      }
+      
+      // Verify current credentials
+      const isValid = await authService.verifyCredentials(credentials.name, credentials.pass, process.env);
+      
+      if (!isValid) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="Roster Calendar"');
+        return res.status(401).json({ 
+          error: 'Authentication failed',
+          message: 'Invalid current password'
+        });
+      }
+      
+      // Verify user is updating their own password
+      if (credentials.name !== staffNo) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied',
+          message: 'You can only update your own password'
+        });
+      }
     }
 
     const result = await authService.setPasswordForStaffNo(staffNo, password, process.env);

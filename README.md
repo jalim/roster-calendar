@@ -136,10 +136,19 @@ Calendar access is protected using HTTP Basic Authentication. Each pilot must se
 
 ### Setting Your Password
 
+**First time (initial password creation):**
 ```bash
 curl -X POST http://localhost:3000/api/roster/password \
   -H "Content-Type: application/json" \
   -d '{"staffNo": "123456", "password": "your-secure-password"}'
+```
+
+**Updating your password (requires authentication with current password):**
+```bash
+curl -X POST http://localhost:3000/api/roster/password \
+  -u 123456:current-password \
+  -H "Content-Type: application/json" \
+  -d '{"staffNo": "123456", "password": "new-secure-password"}'
 ```
 
 ### Accessing Your Calendar
@@ -160,6 +169,8 @@ When subscribing in calendar applications, you'll be prompted for:
 - Passwords are stored as bcrypt hashes (salt rounds: 12)
 - Minimum password length: 6 characters
 - Each pilot can only access their own roster
+- **Password updates require authentication**: You must provide your current password to change it
+- **Initial password creation is open**: Anyone can set a password for a staff number that doesn't have one yet (consider restricting this in production)
 - Use HTTPS in production to protect credentials in transit
 
 ## API Endpoints
