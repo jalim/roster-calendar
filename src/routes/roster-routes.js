@@ -209,7 +209,7 @@ router.post('/upload', upload.single('roster'), async (req, res) => {
       rosterId: rosterId,
       employee: roster.employee,
       entriesCount: roster.entries.length,
-      icsUrl: `/api/roster/${rosterId}/calendar.ics`
+      icsUrl: `/api/roster/calendar.ics`
     });
   } catch (error) {
     console.error('Error processing roster:', error);
@@ -234,7 +234,7 @@ router.post('/text', express.text({ type: 'text/plain', limit: '1mb' }), async (
       rosterId: rosterId,
       employee: roster.employee,
       entriesCount: roster.entries.length,
-      icsUrl: `/api/roster/${rosterId}/calendar.ics`
+      icsUrl: `/api/roster/calendar.ics`
     });
   } catch (error) {
     console.error('Error processing roster:', error);
@@ -243,25 +243,18 @@ router.post('/text', express.text({ type: 'text/plain', limit: '1mb' }), async (
 });
 
 /**
- * Get ICS calendar for a roster
- * GET /api/roster/:rosterId/calendar.ics
- * Requires HTTP Basic Authentication with staff number and password
+ * Get ICS calendar for authenticated user's roster
+ * GET /api/roster/calendar.ics
+ * Requires HTTP Basic Authentication - staff number from auth determines which roster to serve
  */
-router.get('/:rosterId/calendar.ics', authenticateCalDAV, async (req, res) => {
+router.get('/calendar.ics', authenticateCalDAV, async (req, res) => {
   try {
-    const { rosterId } = req.params;
+    // Use authenticated staff number to determine which roster to serve
+    const rosterId = req.authenticatedStaffNo;
     const rosterBucket = rosterStore.getRosterBucket(rosterId);
 
     if (!rosterBucket) {
       return res.status(404).json({ error: 'Roster not found' });
-    }
-
-    // Verify that the authenticated user is accessing their own roster
-    if (req.authenticatedStaffNo !== rosterId) {
-      return res.status(403).json({ 
-        error: 'Access denied',
-        message: 'You can only access your own roster'
-      });
     }
 
     const icsService = new ICSCalendarService();

@@ -54,7 +54,7 @@ curl -X POST http://localhost:3000/api/roster/password \
 
 In your calendar application (Apple Calendar, Google Calendar, Outlook):
 - Add a new calendar subscription
-- URL: `http://localhost:3000/api/roster/YOUR_STAFF_NUMBER/calendar.ics`
+- URL: `http://localhost:3000/api/roster/calendar.ics`
 - When prompted for credentials:
   - **Username**: Your staff number
   - **Password**: The password you set in step 3
@@ -67,7 +67,9 @@ In your calendar application (Apple Calendar, Google Calendar, Outlook):
 
 If you upload multiple rosters for the same staff number (e.g. June, then July, then August), the service keeps them all and serves a single combined calendar at:
 
-`/api/roster/<staffNo>/calendar.ics`
+`/api/roster/calendar.ics`
+
+The calendar URL is the same for all users - authentication determines which roster is displayed.
 
 Re-uploading the exact same roster text won’t duplicate events (events are de-duplicated by stable UID).
 
@@ -110,14 +112,15 @@ Response:
     "base": "PER"
   },
   "entriesCount": 30,
-  "icsUrl": "/api/roster/000000/calendar.ics"
+  "icsUrl": "/api/roster/calendar.ics"
 }
 ```
 
 ### Download ICS Calendar
 
 ```bash
-curl http://localhost:3000/api/roster/000000/calendar.ics -o roster.ics
+# Requires authentication with your staff number and password
+curl -u 000000:your-password http://localhost:3000/api/roster/calendar.ics -o roster.ics
 ```
 
 ### Subscribe to Calendar
@@ -156,13 +159,14 @@ curl -X POST http://localhost:3000/api/roster/password \
 Once your password is set, access your calendar using HTTP Basic Authentication:
 
 ```bash
-# Download with authentication
-curl -u 123456:your-password http://localhost:3000/api/roster/123456/calendar.ics -o roster.ics
+# Download with authentication (same URL for all users - auth determines which roster)
+curl -u 123456:your-password http://localhost:3000/api/roster/calendar.ics -o roster.ics
 ```
 
 When subscribing in calendar applications, you'll be prompted for:
 - **Username:** Your staff number (e.g., 123456)
 - **Password:** The password you set
+- **URL:** `http://localhost:3000/api/roster/calendar.ics` (same for all users)
 
 ### Security Notes
 
@@ -181,7 +185,7 @@ When subscribing in calendar applications, you'll be prompted for:
 - `POST /api/roster/text` - Upload roster as text (text/plain)
 - `POST /api/roster/password` - Set/update password for a staff number
 - `GET /api/roster/:rosterId` - Get roster details
-- `GET /api/roster/:rosterId/calendar.ics` - Download ICS calendar (**requires authentication**)
+- `GET /api/roster/calendar.ics` - Download ICS calendar (**requires authentication**, uses auth to determine which roster to serve)
 
 ### Debug endpoints (optional)
 
