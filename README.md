@@ -24,6 +24,43 @@ This service allows pilots to send their monthly roster text file from the Qanta
 npm install
 ```
 
+## Quick Start
+
+### 1. Start the Server
+
+```bash
+npm start
+```
+
+The server will run on port 3000 by default (configurable via `PORT` environment variable).
+
+### 2. Upload Your Roster
+
+```bash
+curl -X POST http://localhost:3000/api/roster/text \
+  -H "Content-Type: text/plain" \
+  --data-binary "@your-roster.txt"
+```
+
+### 3. Set Your Password
+
+```bash
+curl -X POST http://localhost:3000/api/roster/password \
+  -H "Content-Type: application/json" \
+  -d '{"staffNo": "YOUR_STAFF_NUMBER", "password": "your-secure-password"}'
+```
+
+### 4. Subscribe to Your Calendar
+
+In your calendar application (Apple Calendar, Google Calendar, Outlook):
+- Add a new calendar subscription
+- URL: `http://localhost:3000/api/roster/YOUR_STAFF_NUMBER/calendar.ics`
+- When prompted for credentials:
+  - **Username**: Your staff number
+  - **Password**: The password you set in step 3
+
+**Note**: In production, use HTTPS instead of HTTP for secure credential transmission.
+
 ## Usage
 
 ### Multiple roster uploads (append)
@@ -344,14 +381,19 @@ roster-calendar/
 │   ├── parsers/
 │   │   └── qantas-roster-parser.js # Roster parser
 │   ├── services/
+│   │   ├── auth-service.js         # Password hashing and authentication
 │   │   ├── ics-calendar-service.js # ICS generation
 │   │   ├── inbox-roster-poller.js  # IMAP polling (optional)
 │   │   ├── roster-store.js         # Shared in-memory roster store
 │   │   ├── timezone-service.js     # Timezone mappings
 │   │   └── email-service.js        # Email handling (framework)
+│   ├── middleware/
+│   │   └── caldav-auth.js          # HTTP Basic Auth middleware
 │   └── routes/
 │       └── roster-routes.js        # API routes
 ├── tests/
+│   ├── auth-service.test.js        # Authentication tests
+│   ├── caldav-auth.test.js         # Auth middleware tests
 │   ├── qantas-roster-parser.test.js
 │   ├── ics-calendar-service.test.js
 │   └── timezone-service.test.js
