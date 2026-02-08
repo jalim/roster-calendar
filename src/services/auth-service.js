@@ -135,6 +135,7 @@ async function setPasswordForStaffNo(staffNo, password, env = process.env) {
   
   credentials.set(staffNo, {
     passwordHash,
+    // Preserve original createdAt on updates; fallback for data migration from old format
     createdAt: isNew ? now : (credentials.get(staffNo)?.createdAt || now),
     updatedAt: now
   });
