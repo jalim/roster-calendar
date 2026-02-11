@@ -280,6 +280,34 @@ router.get('/calendar.ics', authenticateCalDAV, async (req, res) => {
 });
 
 /**
+ * Get heavily redacted public ICS calendar for a staff member's roster
+ * GET /api/roster/:staffNo/public/calendar.ics
+ * No authentication required - shows only busy/free status without sensitive details
+ * Useful for family/friends who only need to know availability
+ */
+router.get('/:staffNo/public/calendar.ics', async (req, res) => {
+  try {
+    const { staffNo } = req.params;
+    const rosterBucket = rosterStore.getRosterBucket(staffNo);
+
+    if (!rosterBucket) {
+      return res.status(404).json({ error: 'Roster not found' });
+    }
+
+    const icsService = new ICSCalendarService();
+    const icsData = await icsService.generatePublicICSForRosters(rosterBucket.rosters);
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="roster-${staffNo}-public.ics"`);
+    res.send(icsData);
+  } catch (error) {
+    console.error('Error generating public ICS:', error);
+    res.status(500).json({ error: 'Failed to generate public calendar' });
+  }
+});
+
+
+/**
  * Get roster information
  * GET /api/roster/:rosterId
  */

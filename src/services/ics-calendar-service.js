@@ -871,6 +871,203 @@ class ICSCalendarService {
     
     return null;
   }
+
+  /**
+   * Generate a heavily redacted public ICS calendar for multiple rosters
+   * Removes sensitive duty/flight details and only shows busy vs free periods
+   * @param {Array<Object>} rosters - Array of parsed roster objects
+   * @returns {Promise<string>} ICS calendar string
+   */
+  async generatePublicICSForRosters(rosters) {
+    const events = this.convertRostersToPublicEvents(rosters);
+
+    return new Promise((resolve, reject) => {
+      ics.createEvents(events, (error, value) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(value);
+        }
+      });
+    });
+  }
+
+  /**
+   * Convert multiple rosters to redacted public events (busy/free only)
+   * @param {Array<Object>} rosters
+   * @returns {Array}
+   */
+  convertRostersToPublicEvents(rosters) {
+    const rosterList = Array.isArray(rosters) ? rosters.filter(Boolean) : [];
+    const allEvents = [];
+
+    for (const roster of rosterList) {
+      const events = this.convertRosterToPublicEvents(roster);
+      for (const event of events) {
+        allEvents.push(event);
+      }
+    }
+
+    // Deduplicate by UID
+    const byUid = new Map();
+    for (const event of allEvents) {
+      if (!event || !event.uid) continue;
+      if (!byUid.has(event.uid)) {
+        byUid.set(event.uid, event);
+      }
+    }
+
+    const merged = Array.from(byUid.values());
+    // Stable ordering
+    merged.sort((a, b) => {
+      const aStart = Array.isArray(a.start) ? a.start.join('-') : '';
+      const bStart = Array.isArray(b.start) ? b.start.join('-') : '';
+      if (aStart < bStart) return -1;
+      if (aStart > bStart) return 1;
+      const aUid = String(a.uid);
+      const bUid = String(b.uid);
+      return aUid.localeCompare(bUid);
+    });
+
+    return merged;
+  }
+
+  /**
+   * Convert roster entries to redacted public calendar events
+   * Only shows busy vs free status without sensitive details
+   * @param {Object} roster - Parsed roster data
+   * @returns {Array} Array of redacted event objects
+   */
+  convertRosterToPublicEvents(roster) {
+    const events = [];
+    const QantasRosterParser = require('../parsers/qantas-roster-parser');
+    const parser = new QantasRosterParser();
+    const period = parser.getRosterPeriod(roster);
+
+    // Pre-compute (year, month) for each entry
+    let currentMonth = period.startMonth;
+    let currentYear = period.startYear;
+    let previousDay = 0;
+    const entriesWithDates = [];
+
+    for (const entry of roster.entries) {
+      if (!entry) continue;
+
+      if (entry.day < previousDay) {
+        currentMonth = (currentMonth + 1) % 12;
+        if (currentMonth === 0) currentYear++;
+      }
+      previousDay = entry.day;
+
+      entriesWithDates.push({ entry, month: currentMonth, year: currentYear });
+    }
+
+    for (const { entry, month, year } of entriesWithDates) {
+      if (!entry) continue;
+
+      const event = this.createPublicEventFromEntry(entry, month, year, roster.employee);
+      if (event) events.push(event);
+    }
+
+    return events;
+  }
+
+  /**
+   * Determine if a duty type should be marked as "busy" (true) or "free" (false)
+   * @param {string} dutyType - The duty type
+   * @returns {boolean} True if busy, false if free
+   */
+  isDutyTypeBusy(dutyType) {
+    // Free/Available duty types
+    const freeDutyTypes = [
+      'DAY_OFF',           // D/O - Rostered Day Off
+      'AVAILABLE_DAY',     // AV - Available Day
+      'ANNUAL_LEAVE',      // AL/LA - Annual Leave
+      'BLANK_DAY'          // BL - Blank Day
+    ];
+
+    return !freeDutyTypes.includes(dutyType);
+  }
+
+  /**
+   * Create a redacted public calendar event from a roster entry
+   * Shows only busy/free status without sensitive details
+   * @param {Object} entry - Roster entry
+   * @param {number} month - Month number (0-11)
+   * @param {number} year - Year
+   * @param {Object} employee - Employee information
+   * @returns {Object|null} Redacted event object or null
+   */
+  createPublicEventFromEntry(entry, month, year, employee) {
+    if (!entry) return null;
+
+    const day = entry.day;
+    const isBusy = this.isDutyTypeBusy(entry.dutyType);
+
+    let title, description, duration, startTime, endTime;
+
+    if (isBusy) {
+      // Busy period - show generic "Busy" status
+      title = 'Busy';
+      description = 'Unavailable';
+
+      // If we have specific times, use them (but don't reveal what the duty is)
+      if (entry.signOn && entry.signOff) {
+        startTime = this.parseTime(entry.signOn);
+        endTime = this.parseTime(entry.signOff);
+      } else {
+        // All-day busy event
+        duration = { days: 1 };
+      }
+    } else {
+      // Free period - show generic "Free" status
+      title = 'Free';
+      description = 'Available';
+      duration = { days: 1 };
+    }
+
+    const event = {
+      title,
+      description,
+      start: duration && duration.days ? [year, month + 1, day] : [year, month + 1, day, ...(startTime || [0, 0])],
+      productId: 'roster-calendar/ics-public',
+      calName: `${employee.name || 'Pilot'} - Public Calendar`,
+      uid: this.stableUidForEntry({ year, month, day, entry, employee }),
+      busyStatus: isBusy ? 'BUSY' : 'FREE',
+      transp: isBusy ? 'OPAQUE' : 'TRANSPARENT'
+    };
+
+    // Handle timed events
+    if (!duration || !duration.days) {
+      if (endTime) {
+        // Check for midnight rollover
+        const startHour = startTime ? startTime[0] : 0;
+        const endHour = endTime[0];
+        
+        if (endHour < startHour) {
+          // Crosses midnight
+          const nextDay = new Date(year, month, day + 1);
+          event.end = [
+            nextDay.getFullYear(),
+            nextDay.getMonth() + 1,
+            nextDay.getDate(),
+            endTime[0],
+            endTime[1]
+          ];
+        } else {
+          event.end = [year, month + 1, day, endTime[0], endTime[1]];
+        }
+      } else if (startTime) {
+        event.duration = { hours: 8 };
+      } else {
+        event.duration = { days: 1 };
+      }
+    } else {
+      event.duration = duration;
+    }
+
+    return event;
+  }
 }
 
 module.exports = ICSCalendarService;

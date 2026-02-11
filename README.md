@@ -186,6 +186,25 @@ When subscribing in calendar applications, you'll be prompted for:
 - `POST /api/roster/password` - Set/update password for a staff number
 - `GET /api/roster/:rosterId` - Get roster details
 - `GET /api/roster/calendar.ics` - Download ICS calendar (**requires authentication**, uses auth to determine which roster to serve)
+- `GET /api/roster/:staffNo/public/calendar.ics` - Download redacted public calendar (**no authentication required**, shows only busy/free status)
+
+### Public Calendar
+
+The public calendar endpoint provides a heavily redacted version of a roster suitable for sharing with family and friends. It shows only whether the pilot is "Busy" or "Free" without revealing any sensitive operational details.
+
+**Example:**
+```bash
+curl http://localhost:3000/api/roster/123456/public/calendar.ics -o public-calendar.ics
+```
+
+**Features:**
+- No authentication required
+- Shows only "Busy" vs "Free" status
+- Removes all flight numbers, duty codes, destinations, and pay information
+- Preserves timing information for accurate scheduling
+- Perfect for sharing with family members who need to know availability for childcare, social plans, etc.
+
+See [Public Calendar Documentation](docs/public-calendar-feature.md) for detailed information.
 
 ### Debug endpoints (optional)
 
