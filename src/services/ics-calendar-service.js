@@ -1004,7 +1004,11 @@ class ICSCalendarService {
     const day = entry.day;
     const isBusy = this.isDutyTypeBusy(entry.dutyType);
 
-    let title, description, duration, startTime, endTime;
+    let title, description, duration, startTime, endTime, timezone;
+
+    // Determine timezone from port or base (same as full calendar)
+    const port = entry.port || employee.base;
+    timezone = this.getTimezoneForPortOrBase(port, employee);
 
     if (isBusy) {
       // Busy period - show generic "Busy" status
@@ -1037,26 +1041,34 @@ class ICSCalendarService {
       transp: isBusy ? 'OPAQUE' : 'TRANSPARENT'
     };
 
-    // Handle timed events
+    // Convert timed (non-all-day) entries to UTC so they display correctly everywhere
     if (!duration || !duration.days) {
-      if (endTime) {
-        // Check for midnight rollover
-        const startHour = startTime ? startTime[0] : 0;
-        const endHour = endTime[0];
-        
-        if (endHour < startHour) {
-          // Crosses midnight
-          const nextDay = new Date(year, month, day + 1);
-          event.end = [
-            nextDay.getFullYear(),
-            nextDay.getMonth() + 1,
-            nextDay.getDate(),
-            endTime[0],
-            endTime[1]
-          ];
-        } else {
-          event.end = [year, month + 1, day, endTime[0], endTime[1]];
+      if (startTime && timezone) {
+        const startUtc = this.toUtcDateArray({ year, month: month + 1, day, time: startTime, timezone });
+        if (startUtc) {
+          event.start = startUtc;
+          event.startInputType = 'utc';
+          event.startOutputType = 'utc';
         }
+      }
+      if (endTime && timezone) {
+        let endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone });
+        // Handle midnight rollover in the same timezone
+        if (endUtc && startTime) {
+          const startUtc = event.start;
+          const startDt = startUtc && startUtc.length === 5 ? DateTime.utc(...startUtc) : null;
+          const endDt = DateTime.utc(...endUtc);
+          if (startDt && endDt < startDt) {
+            endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone, addDays: 1 });
+          }
+        }
+        if (endUtc) {
+          event.end = endUtc;
+          event.endInputType = 'utc';
+          event.endOutputType = 'utc';
+        }
+      } else if (duration) {
+        event.duration = duration;
       } else if (startTime) {
         event.duration = { hours: 8 };
       } else {

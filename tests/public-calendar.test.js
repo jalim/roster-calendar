@@ -211,7 +211,8 @@ describe('Public Calendar Service', () => {
         signOff: '1700'
       };
       
-      const event = icsService.createPublicEventFromEntry(entry, 1, 2026, { name: 'Test Pilot' });
+      // Provide employee with base for timezone lookup
+      const event = icsService.createPublicEventFromEntry(entry, 1, 2026, { name: 'Test Pilot', base: 'PER' });
       
       expect(event).toBeDefined();
       expect(event.title).toBe('Busy');
@@ -219,10 +220,13 @@ describe('Public Calendar Service', () => {
       expect(event.busyStatus).toBe('BUSY');
       expect(event.transp).toBe('OPAQUE');
       
-      // Should have time information
+      // Should have time information converted to UTC
       expect(event.start.length).toBe(5); // [year, month, day, hour, minute]
-      expect(event.start[3]).toBe(5);  // 05:01
-      expect(event.start[4]).toBe(1);
+      // PER is UTC+8, so 05:01 local = 21:01 previous day UTC
+      expect(event.start[3]).toBe(21);  // Hour in UTC
+      expect(event.start[4]).toBe(1);   // Minute
+      expect(event.startInputType).toBe('utc');
+      expect(event.startOutputType).toBe('utc');
     });
 
     test('should create busy event for Flight duty', () => {
@@ -235,7 +239,7 @@ describe('Public Calendar Service', () => {
         signOff: '0012'
       };
       
-      const event = icsService.createPublicEventFromEntry(entry, 1, 2026, { name: 'Test Pilot' });
+      const event = icsService.createPublicEventFromEntry(entry, 1, 2026, { name: 'Test Pilot', base: 'PER' });
       
       expect(event).toBeDefined();
       expect(event.title).toBe('Busy');
@@ -252,15 +256,16 @@ describe('Public Calendar Service', () => {
         signOff: '0012'  // 00:12 next day
       };
       
-      const event = icsService.createPublicEventFromEntry(entry, 1, 2026, { name: 'Test Pilot' });
+      const event = icsService.createPublicEventFromEntry(entry, 1, 2026, { name: 'Test Pilot', base: 'PER' });
       
       expect(event).toBeDefined();
       expect(event.end).toBeDefined();
       
-      // End should be next day
-      const startDay = event.start[2];
-      const endDay = event.end[2];
-      expect(endDay).toBe(startDay + 1);
+      // Times are in UTC, but midnight rollover should still be detected
+      // The end time should be later than start time in UTC
+      const startDt = new Date(Date.UTC(event.start[0], event.start[1] - 1, event.start[2], event.start[3], event.start[4]));
+      const endDt = new Date(Date.UTC(event.end[0], event.end[1] - 1, event.end[2], event.end[3], event.end[4]));
+      expect(endDt.getTime()).toBeGreaterThan(startDt.getTime());
     });
   });
 });
