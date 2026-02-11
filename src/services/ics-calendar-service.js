@@ -478,6 +478,82 @@ class ICSCalendarService {
     return events;
   }
 
+  /**
+   * Create redacted all-day "Busy" events for multi-day pairings (public calendar version)
+   * Shows pilot as busy for entire period away from home base, without revealing details
+   * @param {Array} dutyPatterns - Array of duty pattern objects
+   * @param {Object} employee - Employee information
+   * @returns {Array} Array of all-day "Busy" event objects
+   */
+  createPublicAllDayPatternEvents(dutyPatterns, employee) {
+    const events = [];
+    if (!Array.isArray(dutyPatterns) || dutyPatterns.length === 0) return events;
+
+    const base = this.normalizePort(employee && employee.base);
+    if (!base) return events;
+
+    // Group patterns by duty code
+    const byDutyCode = new Map();
+    for (const pattern of dutyPatterns) {
+      if (!pattern || !pattern.dutyCode) continue;
+      const code = String(pattern.dutyCode).trim();
+      if (!byDutyCode.has(code)) byDutyCode.set(code, []);
+      byDutyCode.get(code).push(pattern);
+    }
+
+    for (const [dutyCode, patterns] of byDutyCode.entries()) {
+      const windows = patterns
+        .map(p => this.getDutyPatternWindow(p, employee))
+        .filter(Boolean)
+        .sort((a, b) => a.startDt.toMillis() - b.startDt.toMillis());
+
+      if (windows.length < 2) continue;
+
+      const first = windows[0];
+      const last = windows[windows.length - 1];
+
+      const startPort = this.normalizePort(first.reportPort);
+      const endPort = this.normalizePort(last.releasePort);
+
+      // Skip patterns that are entirely at base across all duty periods
+      const allAtBase = windows.every(w =>
+        this.normalizePort(w.reportPort) === base && this.normalizePort(w.releasePort) === base
+      );
+      if (allAtBase) continue;
+
+      const startDate = first.startDate;
+      const endLocalDate = last.endLocalDate;
+
+      // Only for patterns that span more than one calendar day
+      if (
+        startDate.year === endLocalDate.year &&
+        startDate.month === endLocalDate.month &&
+        startDate.day === endLocalDate.day
+      ) {
+        continue;
+      }
+
+      const endExclusive = DateTime
+        .fromObject({ year: endLocalDate.year, month: endLocalDate.month, day: endLocalDate.day }, { zone: 'utc' })
+        .plus({ days: 1 });
+
+      // Redacted event - just show as "Busy" for the entire period away from base
+      events.push({
+        title: 'Busy',
+        description: 'Unavailable - Away from base',
+        start: [startDate.year, startDate.month + 1, startDate.day],
+        end: [endExclusive.year, endExclusive.month, endExclusive.day],
+        productId: 'roster-calendar/ics-public',
+        calName: `${employee.name || 'Pilot'} - Public Calendar`,
+        uid: `${startDate.year}-${startDate.month + 1}-${startDate.day}-pattern-${String(dutyCode).trim()}@roster-calendar`,
+        busyStatus: 'BUSY',
+        transp: 'OPAQUE'
+      });
+    }
+
+    return events;
+  }
+
   getTimezoneForPortOrBase(port, employee) {
     return this.timezoneService.getTimezone(port || (employee && employee.base));
   }
@@ -677,11 +753,20 @@ class ICSCalendarService {
    */
   createEventFromEntry(entry, month, year, employee, payRate) {
     const day = entry.day;
-    let title, description, startTime, endTime, duration, timezone;
+    let title, description, startTime, endTime, duration, startTimezone, endTimezone;
 
-    // Determine timezone from port or base
-    const port = entry.port || employee.base;
-    timezone = this.getTimezoneForPortOrBase(port, employee);
+    // For flight duties, sign-on is typically at base, sign-off at destination port
+    // For other duties, both times are in the same timezone (port or base)
+    if (entry.dutyType === 'FLIGHT' && entry.port) {
+      // Flight duty: sign-on at base, sign-off at destination
+      startTimezone = this.getTimezoneForPortOrBase(employee.base, employee);
+      endTimezone = this.getTimezoneForPortOrBase(entry.port, employee);
+    } else {
+      // Non-flight duty: both times in same timezone
+      const port = entry.port || employee.base;
+      startTimezone = this.getTimezoneForPortOrBase(port, employee);
+      endTimezone = startTimezone;
+    }
 
     switch (entry.dutyType) {
       case 'FLIGHT':
@@ -748,35 +833,34 @@ class ICSCalendarService {
       uid: this.stableUidForEntry({ year, month, day, entry, employee })
     };
 
-    // Add timezone information
-    if (timezone) {
-      // Store timezone info in description for now
-      // The ics library has limited timezone support, so we document it
-      event.description = `${description}\n\nTimezone: ${timezone}`;
-      
-      // For proper timezone support, calendar apps will use the timezone
-      // embedded in the ICS file. The times are stored in UTC internally.
+    // Add timezone information to description
+    if (startTimezone && endTimezone) {
+      if (startTimezone === endTimezone) {
+        event.description = `${description}\n\nTimezone: ${startTimezone}`;
+      } else {
+        event.description = `${description}\n\nSign-on timezone: ${startTimezone}\nSign-off timezone: ${endTimezone}`;
+      }
     }
 
     // Convert timed (non-all-day) entries to UTC so they display correctly everywhere.
     if (!duration || !duration.days) {
-      if (startTime && timezone) {
-        const startUtc = this.toUtcDateArray({ year, month: month + 1, day, time: startTime, timezone });
+      if (startTime && startTimezone) {
+        const startUtc = this.toUtcDateArray({ year, month: month + 1, day, time: startTime, timezone: startTimezone });
         if (startUtc) {
           event.start = startUtc;
           event.startInputType = 'utc';
           event.startOutputType = 'utc';
         }
       }
-      if (endTime && timezone) {
-        let endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone });
-        // Handle midnight rollover in the same timezone
+      if (endTime && endTimezone) {
+        let endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone: endTimezone });
+        // Handle midnight rollover - check if end is before start in UTC
         if (endUtc && startTime) {
           const startUtc = event.start;
           const startDt = startUtc && startUtc.length === 5 ? DateTime.utc(...startUtc) : null;
           const endDt = DateTime.utc(...endUtc);
           if (startDt && endDt < startDt) {
-            endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone, addDays: 1 });
+            endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone: endTimezone, addDays: 1 });
           }
         }
         if (endUtc) {
@@ -944,6 +1028,8 @@ class ICSCalendarService {
     const parser = new QantasRosterParser();
     const period = parser.getRosterPeriod(roster);
 
+    const hasDutyPatterns = Array.isArray(roster.dutyPatterns) && roster.dutyPatterns.length > 0;
+
     // Pre-compute (year, month) for each entry
     let currentMonth = period.startMonth;
     let currentYear = period.startYear;
@@ -962,8 +1048,20 @@ class ICSCalendarService {
       entriesWithDates.push({ entry, month: currentMonth, year: currentYear });
     }
 
+    // If we have Pattern Details, add all-day "Busy" events for multi-day pairings (away from base)
+    if (hasDutyPatterns) {
+      const patternEvents = this.createPublicAllDayPatternEvents(roster.dutyPatterns, roster.employee);
+      for (const e of patternEvents) events.push(e);
+    }
+
     for (const { entry, month, year } of entriesWithDates) {
       if (!entry) continue;
+
+      // If we have Pattern Details, skip flight duty entries to avoid duplicates
+      // (they're covered by the all-day pattern events)
+      if (hasDutyPatterns && entry.dutyType === 'FLIGHT') {
+        continue;
+      }
 
       const event = this.createPublicEventFromEntry(entry, month, year, roster.employee);
       if (event) events.push(event);
@@ -1004,11 +1102,20 @@ class ICSCalendarService {
     const day = entry.day;
     const isBusy = this.isDutyTypeBusy(entry.dutyType);
 
-    let title, description, duration, startTime, endTime, timezone;
+    let title, description, duration, startTime, endTime, startTimezone, endTimezone;
 
-    // Determine timezone from port or base (same as full calendar)
-    const port = entry.port || employee.base;
-    timezone = this.getTimezoneForPortOrBase(port, employee);
+    // For flight duties, sign-on is typically at base, sign-off at destination port
+    // For other duties, both times are in the same timezone (port or base)
+    if (entry.dutyType === 'FLIGHT' && entry.port) {
+      // Flight duty: sign-on at base, sign-off at destination
+      startTimezone = this.getTimezoneForPortOrBase(employee.base, employee);
+      endTimezone = this.getTimezoneForPortOrBase(entry.port, employee);
+    } else {
+      // Non-flight duty: both times in same timezone
+      const port = entry.port || employee.base;
+      startTimezone = this.getTimezoneForPortOrBase(port, employee);
+      endTimezone = startTimezone;
+    }
 
     if (isBusy) {
       // Busy period - show generic "Busy" status
@@ -1043,23 +1150,23 @@ class ICSCalendarService {
 
     // Convert timed (non-all-day) entries to UTC so they display correctly everywhere
     if (!duration || !duration.days) {
-      if (startTime && timezone) {
-        const startUtc = this.toUtcDateArray({ year, month: month + 1, day, time: startTime, timezone });
+      if (startTime && startTimezone) {
+        const startUtc = this.toUtcDateArray({ year, month: month + 1, day, time: startTime, timezone: startTimezone });
         if (startUtc) {
           event.start = startUtc;
           event.startInputType = 'utc';
           event.startOutputType = 'utc';
         }
       }
-      if (endTime && timezone) {
-        let endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone });
-        // Handle midnight rollover in the same timezone
+      if (endTime && endTimezone) {
+        let endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone: endTimezone });
+        // Handle midnight rollover - check if end is before start
         if (endUtc && startTime) {
           const startUtc = event.start;
           const startDt = startUtc && startUtc.length === 5 ? DateTime.utc(...startUtc) : null;
           const endDt = DateTime.utc(...endUtc);
           if (startDt && endDt < startDt) {
-            endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone, addDays: 1 });
+            endUtc = this.toUtcDateArray({ year, month: month + 1, day, time: endTime, timezone: endTimezone, addDays: 1 });
           }
         }
         if (endUtc) {
