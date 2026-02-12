@@ -1,0 +1,121 @@
+<div class="container">
+  <div class="row">
+    <div class="col-lg-8 mx-auto">
+      <h2 class="mb-4">
+        <i class="bi bi-house-door"></i> Dashboard
+      </h2>
+
+      <!-- Welcome Card -->
+      <div class="card shadow mb-4">
+        <div class="card-body">
+          <h5 class="card-title">Welcome, <%= currentUser.staffNo %></h5>
+          <p class="text-muted mb-0">
+            <i class="bi bi-envelope"></i> <%= currentUser.email || 'No email set' %>
+          </p>
+        </div>
+      </div>
+
+      <!-- Calendar Subscriptions -->
+      <div class="card shadow mb-4">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">
+            <i class="bi bi-calendar-check"></i> Calendar Subscriptions
+          </h5>
+        </div>
+        <div class="card-body">
+          <!-- Private Calendar -->
+          <h6 class="mb-3">
+            <i class="bi bi-lock"></i> Private Calendar (Full Details)
+          </h6>
+          <p class="text-muted">
+            This calendar includes all roster details and requires authentication.
+          </p>
+          
+          <div class="mb-3">
+            <label class="form-label fw-bold">Calendar URL:</label>
+            <div class="calendar-url">
+              <%= baseUrl %>/api/roster/calendar.ics
+            </div>
+            <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyToClipboard('<%= baseUrl %>/api/roster/calendar.ics')">
+              <i class="bi bi-clipboard"></i> Copy URL
+            </button>
+          </div>
+
+          <div class="alert alert-info">
+            <strong>Setup Instructions:</strong>
+            <ol class="mb-0 mt-2">
+              <li>Copy the calendar URL above</li>
+              <li>In your calendar app (Apple Calendar, Google Calendar, Outlook), add a new calendar subscription</li>
+              <li>When prompted for authentication:
+                <ul>
+                  <li><strong>Username:</strong> <%= currentUser.staffNo %></li>
+                  <li><strong>Password:</strong> Your account password</li>
+                </ul>
+              </li>
+            </ol>
+          </div>
+
+          <hr class="my-4">
+
+          <!-- Public Calendar -->
+          <h6 class="mb-3">
+            <i class="bi bi-globe"></i> Public Calendar (Redacted)
+          </h6>
+          <p class="text-muted">
+            This calendar has sensitive information redacted and doesn't require authentication.
+            Share this with family or friends.
+          </p>
+          
+          <div class="mb-3">
+            <label class="form-label fw-bold">Calendar URL:</label>
+            <div class="calendar-url">
+              <%= baseUrl %>/api/roster/<%= currentUser.staffNo %>/public/calendar.ics
+            </div>
+            <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyToClipboard('<%= baseUrl %>/api/roster/<%= currentUser.staffNo %>/public/calendar.ics')">
+              <i class="bi bi-clipboard"></i> Copy URL
+            </button>
+          </div>
+
+          <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>Note:</strong> The public calendar URL will be improved in a future update to use a secure token instead of your staff number for better privacy.
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="card shadow">
+        <div class="card-header">
+          <h5 class="mb-0">
+            <i class="bi bi-gear"></i> Quick Actions
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="d-grid gap-2">
+            <a href="/account/profile" class="btn btn-outline-primary">
+              <i class="bi bi-person"></i> Update Profile
+            </a>
+            <a href="/account/password" class="btn btn-outline-primary">
+              <i class="bi bi-key"></i> Change Password
+            </a>
+            <% if (currentUser.isAdmin) { %>
+            <a href="/admin/approvals" class="btn btn-outline-success">
+              <i class="bi bi-shield-check"></i> Admin Panel
+            </a>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+      alert('Calendar URL copied to clipboard!');
+    }, function() {
+      alert('Failed to copy. Please copy manually.');
+    });
+  }
+</script>

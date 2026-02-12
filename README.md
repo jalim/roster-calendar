@@ -8,6 +8,11 @@ This service allows pilots to send their monthly roster text file from the Qanta
 
 ## Features
 
+- **Web UI**: Self-service pilot portal for account management
+  - Sign up with email verification
+  - Admin approval workflow
+  - Password management and reset
+  - Personal dashboard with calendar subscription URLs
 - **Roster Parsing**: Parses Qantas Airways roster text files
 - **ICS Calendar Generation**: Converts roster entries to standard ICS format
 - **Timezone Support**: Automatically handles timezone information for different airports
@@ -17,6 +22,7 @@ This service allows pilots to send their monthly roster text file from the Qanta
 - **REST API**: Upload rosters and retrieve ICS calendars via HTTP
 - **Email Support**: Framework for receiving rosters via email (requires integration)
 - **Calendar Subscription**: Generated ICS files can be subscribed to in any calendar application
+- **Public Calendar**: Shareable redacted calendar for family/friends
 
 ## Installation
 
@@ -34,7 +40,29 @@ npm start
 
 The server will run on port 3000 by default (configurable via `PORT` environment variable).
 
-### 2. Upload Your Roster
+### 2. Web UI (Recommended)
+
+Visit `http://localhost:3000` in your browser to:
+
+1. **Sign Up**: Create a new account
+   - Enter your 6-digit staff number
+   - Provide your email address
+   - Create a secure password (8+ chars, uppercase, lowercase, number)
+   - Verify your email by clicking the link sent to your inbox
+   
+2. **Admin Approval**: Wait for admin approval (admin receives notification)
+   - Admins can approve/reject at `/admin/approvals`
+   
+3. **Login**: Access your dashboard
+   - View calendar subscription URLs (private and public)
+   - Manage your profile and password
+   - Subscribe to your calendar in Apple Calendar, Google Calendar, etc.
+
+### 3. REST API (Alternative)
+
+For programmatic access:
+
+#### Upload Your Roster
 
 ```bash
 curl -X POST http://localhost:3000/api/roster/text \
@@ -42,13 +70,15 @@ curl -X POST http://localhost:3000/api/roster/text \
   --data-binary "@your-roster.txt"
 ```
 
-### 3. Set Your Password
+#### Set Your Password (First Time)
 
 ```bash
 curl -X POST http://localhost:3000/api/roster/password \
   -H "Content-Type: application/json" \
-  -d '{"staffNo": "YOUR_STAFF_NUMBER", "password": "your-secure-password"}'
+  -d '{"staffNo": "YOUR_STAFF_NUMBER", "password": "YourPassword123"}'
 ```
+
+Note: Passwords now require 8+ characters with at least one uppercase, lowercase, and number.
 
 ### 4. Subscribe to Your Calendar
 
@@ -416,21 +446,53 @@ roster-calendar/
 │   │   └── qantas-roster-parser.js # Roster parser
 │   ├── services/
 │   │   ├── auth-service.js         # Password hashing and authentication
+│   │   ├── pending-approvals.js    # Signup approval workflow
+│   │   ├── password-reset.js       # Password reset tokens
+│   │   ├── session-store.js        # File-based session storage
 │   │   ├── ics-calendar-service.js # ICS generation
 │   │   ├── inbox-roster-poller.js  # IMAP polling (optional)
 │   │   ├── roster-store.js         # Shared in-memory roster store
 │   │   ├── timezone-service.js     # Timezone mappings
-│   │   └── email-service.js        # Email handling (framework)
+│   │   ├── pilot-directory.js      # Email mapping
+│   │   └── outbound-email-service.js # Email notifications
 │   ├── middleware/
-│   │   └── caldav-auth.js          # HTTP Basic Auth middleware
+│   │   ├── caldav-auth.js          # HTTP Basic Auth middleware
+│   │   ├── require-auth.js         # Session authentication
+│   │   ├── require-admin.js        # Admin authorization
+│   │   └── view-helpers.js         # Template helpers
 │   └── routes/
-│       └── roster-routes.js        # API routes
+│       ├── roster-routes.js        # API routes
+│       ├── auth-routes.js          # Authentication routes
+│       ├── admin-routes.js         # Admin approval routes
+│       ├── account-routes.js       # Account management routes
+│       └── dashboard-routes.js     # Dashboard route
+├── views/
+│   ├── layout.ejs                  # Shared layout template
+│   ├── login.ejs                   # Login page
+│   ├── signup.ejs                  # Signup page
+│   ├── dashboard.ejs               # User dashboard
+│   ├── forgot-password.ejs         # Password reset request
+│   ├── reset-password.ejs          # Password reset form
+│   ├── verify-email-success.ejs    # Email verification confirmation
+│   ├── account/
+│   │   ├── profile.ejs             # Profile management
+│   │   └── password.ejs            # Password change
+│   └── admin/
+│       ├── login.ejs               # Admin login
+│       └── approvals.ejs           # Approval dashboard
 ├── tests/
 │   ├── auth-service.test.js        # Authentication tests
 │   ├── caldav-auth.test.js         # Auth middleware tests
 │   ├── qantas-roster-parser.test.js
 │   ├── ics-calendar-service.test.js
 │   └── timezone-service.test.js
+├── data/
+│   ├── credentials.json            # Hashed passwords (auto-created)
+│   ├── pilot-email-map.json        # Staff number → email mapping
+│   ├── pending-approvals.json      # Pending signups (auto-created)
+│   ├── password-resets.json        # Reset tokens (auto-created)
+│   ├── sessions.json               # User sessions (auto-created)
+│   └── session-secret.txt          # Session encryption key (auto-created)
 ├── examples/
 │   └── sample-roster.txt           # Sample roster file
 └── package.json
@@ -449,7 +511,72 @@ ROSTER_PERSIST_PATH=./data/roster-store.json
 
 # CalDAV Authentication - Password credentials storage
 ROSTER_CREDENTIALS_PATH=./data/credentials.json
+
+# Session Management (auto-generated if not set)
+ROSTER_SESSION_SECRET=your-random-secret-here
+
+# Email Configuration (for signup verification and notifications)
+ROSTER_OUTBOUND_EMAIL_ENABLED=true
+ROSTER_SMTP_HOST=smtp.example.com
+ROSTER_SMTP_PORT=587
+ROSTER_SMTP_USER=your-email@example.com
+ROSTER_SMTP_PASS=your-smtp-password
+ROSTER_EMAIL_FROM=Roster Calendar <noreply@example.com>
 ```
+
+## Web UI Routes
+
+### Public Routes
+- `GET /` - Home page (redirects to login or dashboard)
+- `GET /login` - Login page
+- `POST /login` - Login form submission
+- `GET /signup` - Signup page
+- `POST /signup` - Signup form submission
+- `GET /verify-email/:token` - Email verification
+- `GET /forgot-password` - Password reset request
+- `POST /forgot-password` - Send password reset email
+- `GET /reset-password/:token` - Password reset form
+- `POST /reset-password` - Reset password
+
+### Authenticated Routes (Require Login)
+- `GET /dashboard` - User dashboard with calendar URLs
+- `GET /account/profile` - View/edit profile
+- `POST /account/profile` - Update email address
+- `GET /account/password` - Change password form
+- `POST /account/password` - Update password
+- `GET /logout` - Logout
+
+### Admin Routes (Require Admin Privileges)
+- `GET /admin/login` - Admin login page
+- `POST /admin/login` - Admin login submission
+- `GET /admin/approvals` - List pending approvals
+- `POST /admin/approvals/:staffNo/approve` - Approve signup
+- `POST /admin/approvals/:staffNo/reject` - Reject signup
+
+## Admin Setup
+
+Staff number `174423` is automatically granted admin privileges when they first create an account. This user will receive email notifications for new signups and can approve/reject accounts via the admin dashboard.
+
+To add additional admins, manually edit `data/credentials.json` and set `"isAdmin": true` for the desired staff numbers.
+
+## Security Features
+
+- **Password Requirements**: 8+ characters, uppercase, lowercase, and number
+- **Email Verification**: Signups require email confirmation (24-hour expiry)
+- **Admin Approval**: All accounts must be approved before login
+- **Password Reset**: Secure token-based reset flow (24-hour expiry)
+- **Rate Limiting**: 5 login attempts per 15 minutes
+- **CSRF Protection**: All web forms protected against CSRF attacks
+- **Session Security**: HTTP-only cookies, secure in production
+- **Security Headers**: Helmet.js for various security headers
+- **Password Hashing**: Bcrypt with 12 salt rounds
+
+## Future Enhancements
+
+- **Public Calendar URL Tokenization**: Currently public calendars use staff numbers in URLs (`/api/roster/:staffNo/public/calendar.ics`). Future versions will use random tokens for better privacy (`/api/roster/public/:token/calendar.ics`)
+- **Two-Factor Authentication**: Optional 2FA for enhanced security
+- **Email Change Verification**: Verify new email addresses before updating
+- **Account Activity Log**: Track login history and account changes
 
 ## License
 

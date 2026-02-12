@@ -284,6 +284,11 @@ router.get('/calendar.ics', authenticateCalDAV, async (req, res) => {
  * GET /api/roster/:staffNo/public/calendar.ics
  * No authentication required - shows only busy/free status without sensitive details
  * Useful for family/friends who only need to know availability
+ * 
+ * TODO: SECURITY IMPROVEMENT - Replace staff number in URL with a tokenized link
+ * Current implementation exposes staff numbers in the URL which is not ideal for privacy.
+ * Future enhancement should use a pattern like /api/roster/public/:token/calendar.ics
+ * where token is a randomly generated string mapped to the staff number.
  */
 router.get('/:staffNo/public/calendar.ics', async (req, res) => {
   try {

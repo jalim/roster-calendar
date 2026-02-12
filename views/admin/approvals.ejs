@@ -1,0 +1,86 @@
+<div class="container">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+          <i class="bi bi-shield-check"></i> Pending Approvals
+        </h2>
+        <a href="/dashboard" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+      </div>
+
+      <% if (pendingApprovals && pendingApprovals.length > 0) { %>
+        <div class="card shadow">
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Staff Number</th>
+                    <th>Email</th>
+                    <th>Email Verified</th>
+                    <th>Requested</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% pendingApprovals.forEach(function(approval) { %>
+                    <tr>
+                      <td><code><%= approval.staffNo %></code></td>
+                      <td><%= approval.email %></td>
+                      <td>
+                        <% if (approval.emailVerified) { %>
+                          <span class="badge bg-success">
+                            <i class="bi bi-check-circle"></i> Verified
+                          </span>
+                        <% } else { %>
+                          <span class="badge bg-warning">
+                            <i class="bi bi-hourglass-split"></i> Pending
+                          </span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <small class="text-muted">
+                          <%= new Date(approval.createdAt).toLocaleDateString() %>
+                          <%= new Date(approval.createdAt).toLocaleTimeString() %>
+                        </small>
+                      </td>
+                      <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                          <% if (approval.emailVerified) { %>
+                            <form method="POST" action="/admin/approvals/<%= approval.staffNo %>/approve" style="display: inline;">
+                              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                              <button type="submit" class="btn btn-success" onclick="return confirm('Approve this account?')">
+                                <i class="bi bi-check-lg"></i> Approve
+                              </button>
+                            </form>
+                          <% } else { %>
+                            <button class="btn btn-success" disabled title="Email must be verified first">
+                              <i class="bi bi-check-lg"></i> Approve
+                            </button>
+                          <% } %>
+                          <form method="POST" action="/admin/approvals/<%= approval.staffNo %>/reject" style="display: inline;">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <button type="submit" class="btn btn-danger" onclick="return confirm('Reject and delete this request?')">
+                              <i class="bi bi-x-lg"></i> Reject
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <% } else { %>
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle"></i>
+          No pending approval requests at this time.
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>

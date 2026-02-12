@@ -4,17 +4,78 @@
 
 const express = require('express');
 const bodyParser = require('body-parser');
+const session = require('express-session');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
+const csurf = require('csurf');
+const path = require('path');
+const expressLayouts = require('express-ejs-layouts');
 require('dotenv').config();
 
 const rosterRoutes = require('./routes/roster-routes');
+const authRoutes = require('./routes/auth-routes');
+const adminRoutes = require('./routes/admin-routes');
+const accountRoutes = require('./routes/account-routes');
+const dashboardRoutes = require('./routes/dashboard-routes');
 const { startInboxRosterPolling } = require('./services/inbox-roster-poller');
 const { createLogger, serializeError } = require('./services/logger');
 const { maybeSendStartupEmail } = require('./services/startup-email-notifier');
+const { FileSessionStore, getSessionSecret } = require('./services/session-store');
+const { viewHelpers } = require('./middleware/view-helpers');
+const { optionalAuth } = require('./middleware/require-auth');
+const authService = require('./services/auth-service');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const logger = createLogger({ component: 'roster-calendar' });
+
+// View engine setup
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, '..', 'views'));
+app.use(expressLayouts);
+app.set('layout', 'layout');
+
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// Session middleware
+const sessionSecret = getSessionSecret();
+app.use(cookieParser());
+app.use(session({
+  store: new FileSessionStore(),
+  secret: sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// CSRF protection (exempt API routes)
+const csrfProtection = csurf({ cookie: false });
+
+// Rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 requests per window
+  message: 'Too many attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Middleware
 app.use(bodyParser.json());
@@ -40,7 +101,7 @@ if (httpLoggingEnabled) {
   });
 }
 
-// Routes
+// API Routes (no CSRF protection)
 app.use('/api/roster', rosterRoutes);
 
 // Health check
@@ -48,19 +109,26 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'roster-calendar' });
 });
 
-// Welcome page
-app.get('/', (req, res) => {
-  res.json({
-    service: 'Roster Calendar Service',
-    version: '1.0.0',
-    description: 'Convert pilot rosters to ICS calendar subscriptions',
-    endpoints: {
-      upload: 'POST /api/roster/upload - Upload roster file',
-      uploadText: 'POST /api/roster/text - Upload roster as text',
-      getCalendar: 'GET /api/roster/:rosterId/calendar.ics - Download ICS calendar',
-      getRoster: 'GET /api/roster/:rosterId - Get roster details'
-    }
-  });
+// View helpers for all web UI routes
+app.use(viewHelpers);
+
+// Web UI Routes (with CSRF protection)
+app.use('/', csrfProtection, authRoutes);
+app.use('/admin', csrfProtection, adminRoutes);
+app.use('/account', csrfProtection, accountRoutes);
+app.use('/', csrfProtection, dashboardRoutes);
+
+// Apply rate limiting to auth routes
+app.use('/login', authLimiter);
+app.use('/signup', authLimiter);
+app.use('/forgot-password', authLimiter);
+
+// Home page
+app.get('/', optionalAuth, (req, res) => {
+  if (req.session && req.session.staffNo) {
+    return res.redirect('/dashboard');
+  }
+  res.render('login', { title: 'Welcome' });
 });
 
 // Last-resort Express error handler (prevents default HTML + ensures stack is logged)
@@ -84,6 +152,23 @@ if (require.main === module) {
     env: process.env.NODE_ENV || 'development',
     inboxPollingEnabled: String(process.env.ROSTER_EMAIL_POLLING_ENABLED || '').trim()
   });
+
+  // Bootstrap admin user (174423)
+  try {
+    const adminStaffNo = '174423';
+    if (authService.hasCredentials(adminStaffNo)) {
+      const bootstrapped = authService.bootstrapAdmin(adminStaffNo);
+      if (bootstrapped) {
+        logger.info('[startup] admin privileges granted', { staffNo: adminStaffNo });
+      } else {
+        logger.info('[startup] admin already configured', { staffNo: adminStaffNo });
+      }
+    } else {
+      logger.info('[startup] admin account not found - will bootstrap on first password set', { staffNo: adminStaffNo });
+    }
+  } catch (err) {
+    logger.warn('[startup] admin bootstrap failed', { error: serializeError(err) });
+  }
 
   const server = app.listen(PORT, () => {
     logger.info('[startup] listening', { port: PORT });
