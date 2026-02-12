@@ -43,7 +43,7 @@
             <div class="calendar-url">
               <%= baseUrl %>/api/roster/calendar.ics
             </div>
-            <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyToClipboard('<%= baseUrl %>/api/roster/calendar.ics')">
+            <button class="btn btn-sm btn-outline-primary mt-2 copy-btn" data-url="<%= baseUrl %>/api/roster/calendar.ics">
               <i class="bi bi-clipboard"></i> Copy URL
             </button>
           </div>
@@ -78,7 +78,7 @@
             <div class="calendar-url">
               <%= baseUrl %>/api/roster/<%= currentUser.staffNo %>/public/calendar.ics
             </div>
-            <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyToClipboard('<%= baseUrl %>/api/roster/<%= currentUser.staffNo %>/public/calendar.ics')">
+            <button class="btn btn-sm btn-outline-primary mt-2 copy-btn" data-url="<%= baseUrl %>/api/roster/<%= currentUser.staffNo %>/public/calendar.ics">
               <i class="bi bi-clipboard"></i> Copy URL
             </button>
           </div>
@@ -118,6 +118,16 @@
 </div>
 
 <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add click handlers to all copy buttons
+    document.querySelectorAll('.copy-btn').forEach(function(button) {
+      button.addEventListener('click', function() {
+        const url = this.getAttribute('data-url');
+        copyToClipboard(url);
+      });
+    });
+  });
+
   function copyToClipboard(text) {
     // Try modern clipboard API first
     if (navigator.clipboard && window.isSecureContext) {
