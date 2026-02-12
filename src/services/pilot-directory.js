@@ -166,7 +166,7 @@ function writePayRateStore(data, env = process.env) {
     .then(() => {
       ensureDirExists(storePath);
       const tmpPath = `${storePath}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(data), 'utf8');
+      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
       fs.renameSync(tmpPath, storePath);
     })
     .catch(() => {

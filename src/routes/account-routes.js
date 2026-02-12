@@ -28,22 +28,32 @@ router.get('/profile', (req, res) => {
  * POST /account/profile - Update profile
  */
 router.post('/profile', [
+  body('firstName').optional({ checkFalsy: true }).trim(),
+  body('lastName').optional({ checkFalsy: true }).trim(),
   body('email').isEmail().withMessage('Invalid email address')
-], (req, res) => {
+], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     req.flash('error', errors.array()[0].msg);
     return res.redirect('/account/profile');
   }
 
-  const { email } = req.body;
+  const { email, firstName, lastName } = req.body;
   const staffNo = req.session.staffNo;
 
   try {
     // Update email
     pilotDirectory.setEmailForStaffNo(staffNo, email);
+    
+    // Update names if provided
+    if (firstName && lastName) {
+      pilotDirectory.setNamesForStaffNo(staffNo, firstName, lastName);
+    }
+    
+    // Wait for write to complete
+    await pilotDirectory._flushWrites();
 
-    logger.info('[account-profile] Email updated', { staffNo, email });
+    logger.info('[account-profile] Profile updated', { staffNo, email, firstName, lastName });
     req.flash('success', 'Profile updated successfully');
     res.redirect('/account/profile');
   } catch (err) {
