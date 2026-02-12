@@ -109,19 +109,29 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'roster-calendar' });
 });
 
-// View helpers for all web UI routes
-app.use(viewHelpers);
+// CSRF protection for all non-API routes
+// Must come before viewHelpers so req.csrfToken() is available
+app.use((req, res, next) => {
+  // Skip CSRF for API routes
+  if (req.path.startsWith('/api/') || req.path === '/health') {
+    return next();
+  }
+  csrfProtection(req, res, next);
+});
 
-// Web UI Routes (with CSRF protection)
-app.use('/', csrfProtection, authRoutes);
-app.use('/admin', csrfProtection, adminRoutes);
-app.use('/account', csrfProtection, accountRoutes);
-app.use('/', csrfProtection, dashboardRoutes);
+// View helpers for all web UI routes (comes after CSRF)
+app.use(viewHelpers);
 
 // Apply rate limiting to auth routes
 app.use('/login', authLimiter);
 app.use('/signup', authLimiter);
 app.use('/forgot-password', authLimiter);
+
+// Web UI Routes
+app.use('/', authRoutes);
+app.use('/admin', adminRoutes);
+app.use('/account', accountRoutes);
+app.use('/', dashboardRoutes);
 
 // Home page
 app.get('/', optionalAuth, (req, res) => {
