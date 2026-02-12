@@ -18,18 +18,28 @@ function viewHelpers(req, res, next) {
       isAdmin: authService.isAdmin(req.session.staffNo)
     };
 
+    // DEBUG: Log what we're looking up
+    console.log('[view-helpers DEBUG] Looking up data for staffNo:', req.session.staffNo, 'type:', typeof req.session.staffNo);
+
     // Get user's email
     const email = pilotDirectory.getEmailForStaffNo(req.session.staffNo);
+    console.log('[view-helpers DEBUG] Email lookup result:', email);
+    
     if (email) {
       res.locals.currentUser.email = email;
     }
 
     // Get user's name
     const names = pilotDirectory.getNamesForStaffNo(req.session.staffNo);
+    console.log('[view-helpers DEBUG] Names lookup result:', names);
+    
     if (names) {
       res.locals.currentUser.firstName = names.firstName;
       res.locals.currentUser.lastName = names.lastName;
     }
+
+    // DEBUG: Log final currentUser
+    console.log('[view-helpers DEBUG] Final currentUser:', JSON.stringify(res.locals.currentUser));
   } else {
     res.locals.currentUser = null;
   }
