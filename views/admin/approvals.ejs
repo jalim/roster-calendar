@@ -18,6 +18,7 @@
                 <thead>
                   <tr>
                     <th>Staff Number</th>
+                    <th>Name</th>
                     <th>Email</th>
                     <th>Email Verified</th>
                     <th>Requested</th>
@@ -28,6 +29,13 @@
                   <% pendingApprovals.forEach(function(approval) { %>
                     <tr>
                       <td><code><%= approval.staffNo %></code></td>
+                      <td>
+                        <% if (approval.firstName && approval.lastName) { %>
+                          <%= approval.firstName %> <%= approval.lastName %>
+                        <% } else { %>
+                          <span class="text-muted">-</span>
+                        <% } %>
+                      </td>
                       <td><%= approval.email %></td>
                       <td>
                         <% if (approval.emailVerified) { %>

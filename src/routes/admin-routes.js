@@ -88,7 +88,7 @@ router.post('/approvals/:staffNo/approve', requireAdmin, async (req, res) => {
 
     // Now set the credentials using the returned passwordHash
     // We need to do this manually since we already have the hash
-    const { email, passwordHash } = result;
+    const { email, firstName, lastName, passwordHash } = result;
 
     // Get internal access to set credentials with existing hash
     // We'll need to modify auth-service to support this, or do it here
@@ -124,6 +124,11 @@ router.post('/approvals/:staffNo/approve', requireAdmin, async (req, res) => {
 
     // Set email in pilot directory
     pilotDirectory.setEmailForStaffNo(staffNo, email);
+
+    // Set names in pilot directory
+    if (firstName && lastName) {
+      pilotDirectory.setNamesForStaffNo(staffNo, firstName, lastName);
+    }
 
     // Send welcome email
     await sendEmail({

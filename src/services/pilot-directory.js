@@ -21,6 +21,12 @@ function getPilotPayRateConfig(env = process.env) {
   return { storePath, allowWrites };
 }
 
+function getPilotNamesConfig(env = process.env) {
+  const storePath = env.ROSTER_PILOT_NAMES_DB_PATH || path.join(process.cwd(), 'data', 'pilot-names-map.json');
+  const allowWrites = !parseBoolean(env.ROSTER_PILOT_NAMES_DB_READONLY, false);
+  return { storePath, allowWrites };
+}
+
 function ensureDirExists(filePath) {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
@@ -218,6 +224,99 @@ function listPilotPayRates(env = process.env) {
     .sort((a, b) => a.staffNo.localeCompare(b.staffNo));
 }
 
+// ========== Pilot Names Management ==========
+
+function readNamesStore(env = process.env) {
+  const { storePath } = getPilotNamesConfig(env);
+  try {
+    if (!fs.existsSync(storePath)) return {};
+    const raw = fs.readFileSync(storePath, 'utf8');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeNamesStore(data, env = process.env) {
+  const { storePath, allowWrites } = getPilotNamesConfig(env);
+  if (!allowWrites) {
+    const err = new Error('Pilot names DB is read-only');
+    err.code = 'PILOT_NAMES_DB_READONLY';
+    throw err;
+  }
+
+  writeChain = writeChain
+    .then(() => {
+      ensureDirExists(storePath);
+      const tmpPath = `${storePath}.tmp`;
+      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+      fs.renameSync(tmpPath, storePath);
+    })
+    .catch(() => {
+      // Ignore write errors to keep core service running.
+    });
+
+  return writeChain;
+}
+
+function getNamesForStaffNo(staffNo, env = process.env) {
+  const key = normalizeStaffNo(staffNo);
+  if (!key) return null;
+  const store = readNamesStore(env);
+  const names = store[key];
+  return names || null;
+}
+
+function setNamesForStaffNo(staffNo, firstName, lastName, env = process.env) {
+  const key = normalizeStaffNo(staffNo);
+  if (!key) {
+    const err = new Error('staffNo is required');
+    err.code = 'PILOT_NAMES_INVALID_STAFFNO';
+    throw err;
+  }
+
+  if (!firstName || typeof firstName !== 'string' || !firstName.trim()) {
+    const err = new Error('firstName is required');
+    err.code = 'PILOT_NAMES_INVALID_FIRSTNAME';
+    throw err;
+  }
+
+  if (!lastName || typeof lastName !== 'string' || !lastName.trim()) {
+    const err = new Error('lastName is required');
+    err.code = 'PILOT_NAMES_INVALID_LASTNAME';
+    throw err;
+  }
+
+  const store = readNamesStore(env);
+  store[key] = {
+    firstName: firstName.trim(),
+    lastName: lastName.trim()
+  };
+  writeNamesStore(store, env);
+  return { staffNo: key, firstName: firstName.trim(), lastName: lastName.trim() };
+}
+
+function deleteNamesForStaffNo(staffNo, env = process.env) {
+  const key = normalizeStaffNo(staffNo);
+  if (!key) return false;
+
+  const store = readNamesStore(env);
+  if (!Object.prototype.hasOwnProperty.call(store, key)) return false;
+
+  delete store[key];
+  writeNamesStore(store, env);
+  return true;
+}
+
+function listPilotNames(env = process.env) {
+  const store = readNamesStore(env);
+  return Object.entries(store)
+    .map(([staffNo, names]) => ({ staffNo, ...names }))
+    .sort((a, b) => a.staffNo.localeCompare(b.staffNo));
+}
+
 module.exports = {
   getEmailForStaffNo,
   setEmailForStaffNo,
@@ -227,13 +326,20 @@ module.exports = {
   setPayRateForStaffNo,
   deletePayRateForStaffNo,
   listPilotPayRates,
+  getNamesForStaffNo,
+  setNamesForStaffNo,
+  deleteNamesForStaffNo,
+  listPilotNames,
   // for tests
   _getPilotEmailConfig: getPilotEmailConfig,
   _getPilotPayRateConfig: getPilotPayRateConfig,
+  _getPilotNamesConfig: getPilotNamesConfig,
   _readStore: readStore,
   _writeStore: writeStore,
   _readPayRateStore: readPayRateStore,
   _writePayRateStore: writePayRateStore,
+  _readNamesStore: readNamesStore,
+  _writeNamesStore: writeNamesStore,
   _flushWrites: flushWrites,
   _looksLikeEmail: looksLikeEmail
 };

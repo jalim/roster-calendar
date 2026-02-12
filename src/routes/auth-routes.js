@@ -28,6 +28,8 @@ router.get('/signup', (req, res) => {
  */
 router.post('/signup', [
   body('staffNo').matches(/^\d{6}$/).withMessage('Staff number must be exactly 6 digits'),
+  body('firstName').trim().notEmpty().withMessage('First name is required'),
+  body('lastName').trim().notEmpty().withMessage('Last name is required'),
   body('email').isEmail().withMessage('Invalid email address'),
   body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
   body('confirmPassword').custom((value, { req }) => {
@@ -43,11 +45,11 @@ router.post('/signup', [
     return res.redirect('/signup');
   }
 
-  const { staffNo, email, password } = req.body;
+  const { staffNo, firstName, lastName, email, password } = req.body;
 
   try {
     // Create pending approval
-    const result = await pendingApprovals.createPendingApproval(staffNo, email, password);
+    const result = await pendingApprovals.createPendingApproval(staffNo, firstName, lastName, email, password);
 
     // Send verification email to pilot
     const verifyUrl = `${req.protocol}://${req.get('host')}/verify-email/${result.emailToken}`;
@@ -77,6 +79,7 @@ If you didn't create this account, please ignore this email.`
         subject: 'New Account Signup - Roster Calendar',
         text: `A new pilot has signed up for Roster Calendar:
 
+Name: ${firstName} ${lastName}
 Staff Number: ${staffNo}
 Email: ${email}
 

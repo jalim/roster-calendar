@@ -23,6 +23,13 @@ function viewHelpers(req, res, next) {
     if (email) {
       res.locals.currentUser.email = email;
     }
+
+    // Get user's name
+    const names = pilotDirectory.getNamesForStaffNo(req.session.staffNo);
+    if (names) {
+      res.locals.currentUser.firstName = names.firstName;
+      res.locals.currentUser.lastName = names.lastName;
+    }
   } else {
     res.locals.currentUser = null;
   }

@@ -100,13 +100,15 @@ function generateToken() {
 /**
  * Create a pending approval request
  * @param {string} staffNo - Staff number (must be 6 digits)
+ * @param {string} firstName - First name
+ * @param {string} lastName - Last name
  * @param {string} email - Email address
  * @param {string} password - Plain text password (will be hashed)
  * @param {Object} env - Environment variables
  * @returns {Promise<Object>} - { success: true, emailToken: string }
  * @throws {Error} - If validation fails
  */
-async function createPendingApproval(staffNo, email, password, env = process.env) {
+async function createPendingApproval(staffNo, firstName, lastName, email, password, env = process.env) {
   initStorage(env);
 
   // Validate staff number format
@@ -122,6 +124,14 @@ async function createPendingApproval(staffNo, email, password, env = process.env
   // Check if already pending
   if (pendingApprovals.has(staffNo)) {
     throw new Error('Staff number already has a pending approval request');
+  }
+
+  // Validate firstName and lastName
+  if (!firstName || typeof firstName !== 'string' || !firstName.trim()) {
+    throw new Error('First name is required');
+  }
+  if (!lastName || typeof lastName !== 'string' || !lastName.trim()) {
+    throw new Error('Last name is required');
   }
 
   // Validate email format
@@ -146,6 +156,8 @@ async function createPendingApproval(staffNo, email, password, env = process.env
   // Create pending approval
   const now = new Date().toISOString();
   pendingApprovals.set(staffNo, {
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
     email,
     passwordHash,
     emailVerified: false,
@@ -211,6 +223,8 @@ function listPending(env = process.env) {
   for (const [staffNo, data] of pendingApprovals.entries()) {
     pending.push({
       staffNo,
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
       email: data.email,
       emailVerified: data.emailVerified,
       createdAt: data.createdAt
@@ -276,6 +290,8 @@ async function approvePending(staffNo, env = process.env) {
     
     // Better approach: Store the credentials data and let the caller handle it
     const email = pending.email;
+    const firstName = pending.firstName || '';
+    const lastName = pending.lastName || '';
     
     // Delete from pending
     pendingApprovals.delete(staffNo);
@@ -284,6 +300,8 @@ async function approvePending(staffNo, env = process.env) {
     return {
       success: true,
       email,
+      firstName,
+      lastName,
       passwordHash: pending.passwordHash
     };
   } catch (err) {

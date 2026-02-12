@@ -8,10 +8,15 @@
       <!-- Welcome Card -->
       <div class="card shadow mb-4">
         <div class="card-body">
-          <h5 class="card-title">Welcome, <%= currentUser.staffNo %></h5>
-          <p class="text-muted mb-0">
-            <i class="bi bi-envelope"></i> <%= currentUser.email || 'No email set' %>
+          <h5 class="card-title">Welcome<% if (currentUser.firstName) { %>, <%= currentUser.firstName %> <%= currentUser.lastName %><% } else { %>, <%= currentUser.staffNo %><% } %></h5>
+          <p class="text-muted mb-1">
+            <i class="bi bi-person-badge"></i> Staff #<%= currentUser.staffNo %>
           </p>
+          <% if (currentUser.email) { %>
+          <p class="text-muted mb-0">
+            <i class="bi bi-envelope"></i> <%= currentUser.email %>
+          </p>
+          <% } %>
         </div>
       </div>
 
