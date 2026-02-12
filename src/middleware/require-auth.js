@@ -3,6 +3,9 @@
  * Checks if user is logged in via session
  */
 
+const authService = require('../services/auth-service');
+const pilotDirectory = require('../services/pilot-directory');
+
 /**
  * Require authentication middleware
  * Redirects to login if not authenticated
@@ -14,11 +17,26 @@ function requireAuth(req, res, next) {
     return res.redirect('/login');
   }
 
-  // Set user info on res.locals for templates
-  res.locals.currentUser = {
-    staffNo: req.session.staffNo,
-    isAdmin: req.session.isAdmin || false
-  };
+  // Only set currentUser if not already set by view-helpers
+  if (!res.locals.currentUser) {
+    res.locals.currentUser = {
+      staffNo: req.session.staffNo,
+      isAdmin: authService.isAdmin(req.session.staffNo)
+    };
+
+    // Get user's email
+    const email = pilotDirectory.getEmailForStaffNo(req.session.staffNo);
+    if (email) {
+      res.locals.currentUser.email = email;
+    }
+
+    // Get user's name
+    const names = pilotDirectory.getNamesForStaffNo(req.session.staffNo);
+    if (names) {
+      res.locals.currentUser.firstName = names.firstName;
+      res.locals.currentUser.lastName = names.lastName;
+    }
+  }
 
   next();
 }
@@ -28,11 +46,25 @@ function requireAuth(req, res, next) {
  * Sets user info if authenticated but doesn't require it
  */
 function optionalAuth(req, res, next) {
-  if (req.session && req.session.staffNo) {
+  // Only set currentUser if not already set by view-helpers
+  if (req.session && req.session.staffNo && !res.locals.currentUser) {
     res.locals.currentUser = {
       staffNo: req.session.staffNo,
-      isAdmin: req.session.isAdmin || false
+      isAdmin: authService.isAdmin(req.session.staffNo)
     };
+
+    // Get user's email
+    const email = pilotDirectory.getEmailForStaffNo(req.session.staffNo);
+    if (email) {
+      res.locals.currentUser.email = email;
+    }
+
+    // Get user's name
+    const names = pilotDirectory.getNamesForStaffNo(req.session.staffNo);
+    if (names) {
+      res.locals.currentUser.firstName = names.firstName;
+      res.locals.currentUser.lastName = names.lastName;
+    }
   }
 
   next();
