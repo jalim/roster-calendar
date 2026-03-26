@@ -809,6 +809,13 @@ class ICSCalendarService {
         duration = { hours: 8 };
         break;
 
+      case 'PERSONAL_LEAVE_RESERVE':
+        title = 'Personal Leave (Reserve)';
+        description = 'Personal leave taken on a reserve duty day';
+        startTime = [9, 0]; // Default to 9 AM
+        duration = { hours: 8 };
+        break;
+
       case 'ANNUAL_LEAVE':
         title = 'Annual Leave';
         description = 'Annual leave';

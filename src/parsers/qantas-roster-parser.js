@@ -539,6 +539,13 @@ class QantasRosterParser {
       if (codeMatch) {
         entry.code = codeMatch[1];
       }
+    } else if (entry.dutyCode === 'LZR') {
+      entry.dutyType = 'PERSONAL_LEAVE_RESERVE';
+      entry.description = 'Personal Leave (Reserve)';
+      const codeMatch = restOfLine.match(/\s+([A-Z0-9]+)\s*$/);
+      if (codeMatch) {
+        entry.code = codeMatch[1];
+      }
     } else if (entry.dutyCode.match(/^SIM\w+\(T\)$/)) {
       // Simulator duty with (T) suffix - e.g., SIM06CA(T)
       entry.dutyType = 'SIMULATOR';
