@@ -280,6 +280,33 @@ router.get('/calendar.ics', authenticateCalDAV, async (req, res) => {
 });
 
 /**
+ * Get semi-public ICS calendar for a staff member's roster
+ * GET /api/roster/:staffNo/semipublic/calendar.ics
+ * No authentication required - shows full duty details but omits all pay information
+ * Useful for sharing schedule with family/friends without exposing salary data
+ */
+router.get('/:staffNo/semipublic/calendar.ics', async (req, res) => {
+  try {
+    const { staffNo } = req.params;
+    const rosterBucket = rosterStore.getRosterBucket(staffNo);
+
+    if (!rosterBucket) {
+      return res.status(404).json({ error: 'Roster not found' });
+    }
+
+    const icsService = new ICSCalendarService();
+    const icsData = await icsService.generateSemiPublicICSForRosters(rosterBucket.rosters);
+
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="roster-${staffNo}-semipublic.ics"`);
+    res.send(icsData);
+  } catch (error) {
+    console.error('Error generating semi-public ICS:', error);
+    res.status(500).json({ error: 'Failed to generate semi-public calendar' });
+  }
+});
+
+/**
  * Get heavily redacted public ICS calendar for a staff member's roster
  * GET /api/roster/:staffNo/public/calendar.ics
  * No authentication required - shows only busy/free status without sensitive details

@@ -203,6 +203,7 @@ class ICSCalendarService {
     const parser = new QantasRosterParser();
     const period = parser.getRosterPeriod(roster);
     const payRate = options.payRate;
+    const includePay = options.includePay !== false;
 
     const hasDutyPatterns = Array.isArray(roster.dutyPatterns) && roster.dutyPatterns.length > 0;
 
@@ -246,7 +247,7 @@ class ICSCalendarService {
           : null;
         const matchingEntry = key ? flightEntryByKey.get(key) : null;
 
-        const dutyEvent = this.createDutyEventFromPattern(dutyPattern, roster.employee, matchingEntry, payRate);
+        const dutyEvent = this.createDutyEventFromPattern(dutyPattern, roster.employee, matchingEntry, payRate, includePay);
         if (dutyEvent) events.push(dutyEvent);
       }
 
@@ -263,7 +264,7 @@ class ICSCalendarService {
         continue;
       }
 
-      const event = this.createEventFromEntry(entry, month, year, roster.employee, payRate);
+      const event = this.createEventFromEntry(entry, month, year, roster.employee, payRate, includePay);
       if (event) events.push(event);
     }
 
@@ -571,7 +572,7 @@ class ICSCalendarService {
     return [utc.year, utc.month, utc.day, utc.hour, utc.minute];
   }
 
-  createDutyEventFromPattern(dutyPattern, employee, matchingEntry, payRate) {
+  createDutyEventFromPattern(dutyPattern, employee, matchingEntry, payRate, includePay = true) {
     if (!dutyPattern || !Array.isArray(dutyPattern.legs) || dutyPattern.legs.length === 0) return null;
 
     // Determine start date: use DATED token if present, otherwise first leg date
@@ -646,10 +647,10 @@ class ICSCalendarService {
       const inferredDutyHours = this.formatMinutesAsHMM(inferredDutyMinutes);
       payLine = this.buildPayLine({ dutyHours: inferredDutyHours, creditHours: null });
     }
-    if (payLine) description += `\n${payLine}`;
+    if (includePay && payLine) description += `\n${payLine}`;
 
     // Add duty value if pay rate is provided and we have credit hours
-    if (payRate && creditHours) {
+    if (includePay && payRate && creditHours) {
       const QantasRosterParser = require('../parsers/qantas-roster-parser');
       const dutyValue = QantasRosterParser.calculateDutyValue(creditHours, payRate);
       if (dutyValue !== null) {
@@ -749,9 +750,10 @@ class ICSCalendarService {
    * @param {number} year - Year
    * @param {Object} employee - Employee information
    * @param {number} payRate - Optional hourly pay rate for value calculations
+   * @param {boolean} includePay - Whether to include pay lines (default true)
    * @returns {Object|null} Event object or null
    */
-  createEventFromEntry(entry, month, year, employee, payRate) {
+  createEventFromEntry(entry, month, year, employee, payRate, includePay = true) {
     const day = entry.day;
     let title, description, startTime, endTime, duration, startTimezone, endTimezone;
 
@@ -772,7 +774,7 @@ class ICSCalendarService {
       case 'FLIGHT':
         title = entry.dutyCode ? `Duty: ${entry.dutyCode}` : 'Duty';
         if (entry.service) title += ` - ${entry.service}`;
-        description = this.buildFlightDescription(entry, payRate);
+        description = this.buildFlightDescription(entry, payRate, includePay);
         startTime = this.parseTime(entry.signOn);
         endTime = this.parseTime(entry.signOff);
         break;
@@ -894,7 +896,7 @@ class ICSCalendarService {
    * @param {Object} entry - Roster entry
    * @returns {string} Description text
    */
-  buildFlightDescription(entry, payRate) {
+  buildFlightDescription(entry, payRate, includePay = true) {
     let desc = `Duty: ${entry.dutyCode || 'Flight'}\n`;
     
     if (entry.service) {
@@ -922,13 +924,13 @@ class ICSCalendarService {
     }
 
     // DPC60 pay rule: pay is max(credit, 60% of duty)
-    if (entry.dutyType === 'FLIGHT' && entry.dutyHours) {
+    if (includePay && entry.dutyType === 'FLIGHT' && entry.dutyHours) {
       const payLine = this.buildPayLine({ dutyHours: entry.dutyHours, creditHours: entry.creditHours });
       if (payLine) desc += `${payLine}\n`;
     }
 
     // Add duty value if pay rate is provided
-    if (payRate && entry.creditHours) {
+    if (includePay && payRate && entry.creditHours) {
       const QantasRosterParser = require('../parsers/qantas-roster-parser');
       const dutyValue = QantasRosterParser.calculateDutyValue(entry.creditHours, payRate);
       if (dutyValue !== null) {
@@ -981,6 +983,17 @@ class ICSCalendarService {
         }
       });
     });
+  }
+
+  /**
+   * Generate a semi-public ICS calendar for multiple rosters.
+   * Shows full duty details (codes, flights, times, ports, hours) but omits all pay information.
+   * No authentication required — suitable for sharing without exposing salary data.
+   * @param {Array<Object>} rosters - Array of parsed roster objects
+   * @returns {Promise<string>} ICS calendar string
+   */
+  async generateSemiPublicICSForRosters(rosters) {
+    return this.generateICSForRosters(rosters, { includePay: false });
   }
 
   /**

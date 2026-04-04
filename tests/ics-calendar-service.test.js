@@ -440,4 +440,66 @@ describe('ICSCalendarService', () => {
     expect(String(pattern.title)).not.toContain('(Long Slip)');
     expect(String(pattern.description || '')).not.toContain('Long slip credit');
   });
+
+  describe('semi-public calendar (includePay: false)', () => {
+    test('generateSemiPublicICSForRosters should return valid ICS', async () => {
+      const icsData = await icsService.generateSemiPublicICSForRosters([roster]);
+      expect(icsData).toBeDefined();
+      expect(typeof icsData).toBe('string');
+      expect(icsData).toContain('BEGIN:VCALENDAR');
+      expect(icsData).toContain('END:VCALENDAR');
+      expect(icsData).toContain('BEGIN:VEVENT');
+    });
+
+    test('generateSemiPublicICSForRosters should not contain pay lines', async () => {
+      const icsData = await icsService.generateSemiPublicICSForRosters([roster]);
+      expect(icsData).not.toContain('Pay:');
+      expect(icsData).not.toContain('DPC60');
+      expect(icsData).not.toContain('Duty Value');
+    });
+
+    test('generateSemiPublicICSForRosters should still contain duty details', async () => {
+      const icsData = await icsService.generateSemiPublicICSForRosters([roster]);
+      // Should have real event titles, not just "Busy"/"Free"
+      expect(icsData).toMatch(/SUMMARY:Duty:|SUMMARY:Day Off|SUMMARY:Reserve Duty:/);
+    });
+
+    test('buildFlightDescription should omit pay when includePay is false', () => {
+      const desc = icsService.buildFlightDescription(
+        { dutyType: 'FLIGHT', dutyCode: 'TEST', dutyHours: '10:00', creditHours: '07:00' },
+        null,
+        false
+      );
+      expect(desc).not.toContain('Pay:');
+      expect(desc).not.toContain('DPC60');
+      expect(desc).toContain('Duty: TEST');
+    });
+
+    test('buildFlightDescription should omit duty value when includePay is false', () => {
+      const desc = icsService.buildFlightDescription(
+        { dutyType: 'FLIGHT', dutyCode: 'TEST', dutyHours: '10:00', creditHours: '07:00' },
+        50.00,
+        false
+      );
+      expect(desc).not.toContain('Duty Value');
+      expect(desc).not.toContain('$');
+    });
+
+    test('convertRosterToEvents with includePay false should omit pay lines', () => {
+      const parser = new QantasRosterParser();
+      const text = fs.readFileSync(
+        path.join(__dirname, '../examples/webCisRoster_174423_01022026.txt'),
+        'utf-8'
+      );
+      const parsed = parser.parse(text);
+      const events = icsService.convertRosterToEvents(parsed, { payRate: 50.00, includePay: false });
+      const flightEvents = events.filter(e => String(e.title || '').startsWith('Duty:'));
+      expect(flightEvents.length).toBeGreaterThan(0);
+      flightEvents.forEach(e => {
+        expect(String(e.description || '')).not.toContain('Pay:');
+        expect(String(e.description || '')).not.toContain('DPC60');
+        expect(String(e.description || '')).not.toContain('Duty Value');
+      });
+    });
+  });
 });
