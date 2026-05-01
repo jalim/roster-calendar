@@ -236,6 +236,30 @@ describe('ICSCalendarService', () => {
     });
   });
 
+  test('should keep BP3745 8130 multi-day duty events distinct when UTC dates overlap', () => {
+    const parser = new QantasRosterParser();
+    const samplePath = path.join(__dirname, '../examples/roster-174423-bp-3745.txt');
+    const rosterText = fs.readFileSync(samplePath, 'utf-8');
+    const parsed = parser.parse(rosterText);
+
+    const events = icsService.convertRosterToEvents(parsed);
+    const duty8130 = events.filter(e => e.title === 'Duty: 8130');
+
+    expect(duty8130.length).toBe(3);
+    expect(new Set(duty8130.map(e => e.uid)).size).toBe(3);
+
+    const may3Duty = duty8130.find(e =>
+      String(e.description || '').includes('Report: MEL 0905') &&
+      String(e.description || '').includes('Release: MEL 2035') &&
+      String(e.description || '').includes('QF765 MEL-PER') &&
+      String(e.description || '').includes('QF768 PER-MEL')
+    );
+
+    expect(may3Duty).toBeDefined();
+    expect(may3Duty.start).toEqual([2026, 5, 2, 23, 5]);
+    expect(may3Duty.end).toEqual([2026, 5, 3, 10, 35]);
+  });
+
   test('should assign correct year/month for Dec→Jan rosters', () => {
     const parser = new QantasRosterParser();
     const samplePath = path.join(__dirname, '../examples/sample-webcis-roster.txt');

@@ -671,7 +671,7 @@ class ICSCalendarService {
       end: endUtc,
       productId: 'roster-calendar/ics',
       calName: `${employee.name || 'Pilot'} Roster`,
-      uid: `${startUtc[0]}-${startUtc[1]}-${startUtc[2]}-duty-${dutyPattern.dutyCode || 'flight'}@roster-calendar`,
+      uid: `${startDate.year}-${startDate.month + 1}-${startDate.day}-${dutyPattern.reportTime || '0000'}-duty-${dutyPattern.dutyCode || 'flight'}@roster-calendar`,
       startInputType: 'utc',
       startOutputType: 'utc',
       endInputType: 'utc',
