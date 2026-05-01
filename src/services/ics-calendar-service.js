@@ -217,6 +217,14 @@ class ICSCalendarService {
     let currentYear = period.startYear;
     let previousDay = 0;
     const entriesWithDates = [];
+    const simulatorSessionKeys = new Set();
+
+    if (Array.isArray(roster.simulatorSessions)) {
+      for (const session of roster.simulatorSessions) {
+        if (!session || !session.simulatorCode) continue;
+        simulatorSessionKeys.add(`${session.year}-${session.month}-${session.day}-${session.simulatorCode}`);
+      }
+    }
     const flightEntryByKey = new Map();
 
     for (const entry of roster.entries) {
@@ -268,8 +276,25 @@ class ICSCalendarService {
         continue;
       }
 
+      // The standalone SIMxx(T) roster-table rows duplicate the simulator session
+      // details. When Pattern Details provides the actual 4-hour sim block, keep
+      // the duty-window row and emit the real sim session instead.
+      if (entry.dutyType === 'SIMULATOR' && entry.dutyCode) {
+        const simCode = this.extractSimulatorCode(entry.dutyCode);
+        if (simCode && simulatorSessionKeys.has(`${year}-${month}-${entry.day}-${simCode}`)) {
+          continue;
+        }
+      }
+
       const event = this.createEventFromEntry(entry, month, year, roster.employee, payRate, includePay);
       if (event) events.push(event);
+    }
+
+    if (Array.isArray(roster.simulatorSessions) && roster.simulatorSessions.length > 0) {
+      for (const session of roster.simulatorSessions) {
+        const simEvent = this.createSimulatorSessionEvent(session, roster.employee);
+        if (simEvent) events.push(simEvent);
+      }
     }
 
     // Add individual flight-leg events if Pattern Details were parsed
@@ -574,6 +599,75 @@ class ICSCalendarService {
     if (!dt.isValid) return null;
     const utc = dt.toUTC();
     return [utc.year, utc.month, utc.day, utc.hour, utc.minute];
+  }
+
+  extractSimulatorCode(value) {
+    if (value === null || value === undefined) return null;
+    const raw = String(value).trim().toUpperCase();
+    const match = raw.match(/&?(SIM[A-Z0-9]+)(?:\(T\))?/);
+    return match ? match[1] : null;
+  }
+
+  createSimulatorSessionEvent(session, employee) {
+    if (!session || !session.simulatorCode) return null;
+
+    const startTz = this.getTimezoneForPortOrBase(session.startPort, employee);
+    const endTz = this.getTimezoneForPortOrBase(session.endPort, employee);
+    const startTime = this.parseTime(session.startTime);
+    const endTime = this.parseTime(session.endTime);
+    if (!startTz || !endTz || !startTime || !endTime) return null;
+
+    const startUtc = this.toUtcDateArray({
+      year: session.year,
+      month: session.month + 1,
+      day: session.day,
+      time: startTime,
+      timezone: startTz
+    });
+    let endUtc = this.toUtcDateArray({
+      year: session.year,
+      month: session.month + 1,
+      day: session.day,
+      time: endTime,
+      timezone: endTz
+    });
+    if (!startUtc || !endUtc) return null;
+
+    const startDt = DateTime.utc(...startUtc);
+    let endDt = DateTime.utc(...endUtc);
+    if (endDt < startDt) {
+      endUtc = this.toUtcDateArray({
+        year: session.year,
+        month: session.month + 1,
+        day: session.day,
+        time: endTime,
+        timezone: endTz,
+        addDays: 1
+      });
+      endDt = DateTime.utc(...endUtc);
+    }
+
+    const title = `Simulator: ${session.simulatorCode}`;
+    let description = `Simulator: ${session.simulatorCode}\nLocation: ${session.startPort || session.endPort || ''}\nTime: ${session.startTime || ''}-${session.endTime || ''}`;
+    if (startTz === endTz) {
+      description += `\n\nTimezone: ${startTz}`;
+    } else {
+      description += `\n\nStart timezone: ${startTz}\nEnd timezone: ${endTz}`;
+    }
+
+    return {
+      title,
+      description,
+      start: startUtc,
+      end: endUtc,
+      productId: 'roster-calendar/ics',
+      calName: `${employee.name || 'Pilot'} Roster`,
+      uid: `${session.year}-${session.month + 1}-${session.day}-sim-${session.simulatorCode}@roster-calendar`,
+      startInputType: 'utc',
+      startOutputType: 'utc',
+      endInputType: 'utc',
+      endOutputType: 'utc'
+    };
   }
 
   createDutyEventFromPattern(dutyPattern, employee, matchingEntry, payRate, includePay = true) {
@@ -1061,6 +1155,14 @@ class ICSCalendarService {
     let currentYear = period.startYear;
     let previousDay = 0;
     const entriesWithDates = [];
+    const simulatorSessionKeys = new Set();
+
+    if (Array.isArray(roster.simulatorSessions)) {
+      for (const session of roster.simulatorSessions) {
+        if (!session || !session.simulatorCode) continue;
+        simulatorSessionKeys.add(`${session.year}-${session.month}-${session.day}-${session.simulatorCode}`);
+      }
+    }
 
     for (const entry of roster.entries) {
       if (!entry) continue;
@@ -1087,6 +1189,13 @@ class ICSCalendarService {
       // (they're covered by the all-day pattern events)
       if (hasDutyPatterns && entry.dutyType === 'FLIGHT') {
         continue;
+      }
+
+      if (entry.dutyType === 'SIMULATOR' && entry.dutyCode) {
+        const simCode = this.extractSimulatorCode(entry.dutyCode);
+        if (simCode && simulatorSessionKeys.has(`${year}-${month}-${entry.day}-${simCode}`)) {
+          continue;
+        }
       }
 
       const event = this.createPublicEventFromEntry(entry, month, year, roster.employee);

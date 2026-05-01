@@ -260,6 +260,31 @@ describe('ICSCalendarService', () => {
     expect(may3Duty.end).toEqual([2026, 5, 3, 10, 35]);
   });
 
+  test('should place simulator sessions inside the simulator duty window', () => {
+    const parser = new QantasRosterParser();
+    const samplePath = path.join(__dirname, '../examples/roster-174423-bp-3745.txt');
+    const rosterText = fs.readFileSync(samplePath, 'utf-8');
+    const parsed = parser.parse(rosterText);
+
+    const events = icsService.convertRosterToEvents(parsed);
+
+    const duty = events.find(e =>
+      e.title === 'PSIM04' &&
+      String(e.description || '').includes('Simulator &SIM07CA')
+    );
+    const sim = events.find(e => e.title === 'Simulator: SIM07CA');
+    const duplicateOffset = events.find(e => e.title === 'SIM07CA(T)');
+
+    expect(duty).toBeDefined();
+    expect(sim).toBeDefined();
+    expect(duplicateOffset).toBeUndefined();
+
+    expect(duty.start).toEqual([2026, 5, 13, 8, 15]);
+    expect(duty.end).toEqual([2026, 5, 13, 13, 30]);
+    expect(sim.start).toEqual([2026, 5, 13, 9, 0]);
+    expect(sim.end).toEqual([2026, 5, 13, 13, 0]);
+  });
+
   test('should assign correct year/month for Dec→Jan rosters', () => {
     const parser = new QantasRosterParser();
     const samplePath = path.join(__dirname, '../examples/sample-webcis-roster.txt');

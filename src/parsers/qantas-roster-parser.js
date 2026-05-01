@@ -95,6 +95,7 @@ class QantasRosterParser {
       employee: {},
       entries: [],
       flights: [],
+      simulatorSessions: [],
       dutyPatterns: [],
       summary: {}
     };
@@ -320,6 +321,35 @@ class QantasRosterParser {
       // 29Dec       768  PER  0709 MEL  1342  73H   3:33 ...
       // 16Jul P     937  BNE  1315 PER  1648  73H   0:00 ...
       // 07Nov A     780  PER  1554 MEL  2226  332   0:00 ... (alternate pax)
+      const simMatch = line.match(/^\s*(\d{1,2}[A-Za-z]{3})\s+&\s+(SIM[A-Z0-9]+)\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\b/);
+      if (simMatch) {
+        const dayMonth = this.parseDayMonthToken(simMatch[1]);
+        if (!dayMonth) continue;
+
+        if (dayMonth.month !== currentMonth) {
+          if (dayMonth.month < previousMonth) {
+            currentYear += 1;
+          }
+          currentMonth = dayMonth.month;
+          previousMonth = currentMonth;
+        }
+
+        previousDay = dayMonth.day;
+
+        roster.simulatorSessions.push({
+          year: currentYear,
+          month: currentMonth,
+          day: dayMonth.day,
+          simulatorCode: simMatch[2],
+          startPort: simMatch[3],
+          startTime: simMatch[4],
+          endPort: simMatch[5],
+          endTime: simMatch[6]
+        });
+
+        continue;
+      }
+
       const match = line.match(/^\s*(\d{1,2}[A-Za-z]{3})\s+([PA]\s+)?(\d{1,4})\s+([A-Z]{3})\s+(\d{4})\s+([A-Z]{3})\s+(\d{4})\b/);
       if (!match) continue;
 

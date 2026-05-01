@@ -211,6 +211,27 @@ describe('QantasRosterParser', () => {
     expect(first).toHaveProperty('day');
   });
 
+  test('should extract simulator sessions from Pattern Details section', () => {
+    const text = fs.readFileSync(
+      path.join(__dirname, '../examples/roster-174423-bp-3745.txt'),
+      'utf-8'
+    );
+    const roster = parser.parse(text);
+
+    expect(Array.isArray(roster.simulatorSessions)).toBe(true);
+
+    const sim07ca = roster.simulatorSessions.find(s => s.simulatorCode === 'SIM07CA');
+    expect(sim07ca).toMatchObject({
+      year: 2026,
+      month: 4,
+      day: 13,
+      startPort: 'BNE',
+      startTime: '1900',
+      endPort: 'BNE',
+      endTime: '2300'
+    });
+  });
+
   test('should prefix QF for numeric flight numbers', () => {
     expect(parser.normalizeFlightNumber('775')).toBe('QF775');
     expect(parser.normalizeFlightNumber('QF775')).toBe('QF775');
