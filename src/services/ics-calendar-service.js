@@ -208,7 +208,11 @@ class ICSCalendarService {
     const hasDutyPatterns = Array.isArray(roster.dutyPatterns) && roster.dutyPatterns.length > 0;
 
     // Pre-compute (year, month) for each entry (roster table only gives day-of-month).
-    // Also index flight-duty rows so Pattern Details duty events can be enriched with duty/credit hours.
+    // Use the same >7 threshold as assignMonthYearToEntries so that repeated day
+    // numbers (e.g. a simulator entry that appears twice in the roster table) don't
+    // trigger false month rollovers. This also works correctly for rosters already
+    // persisted before the parser ordering fix, since it relies on period.startMonth
+    // from summary.periodStart (always correctly stored) rather than entry.month.
     let currentMonth = period.startMonth;
     let currentYear = period.startYear;
     let previousDay = 0;
@@ -218,7 +222,7 @@ class ICSCalendarService {
     for (const entry of roster.entries) {
       if (!entry) continue;
 
-      if (entry.day < previousDay) {
+      if (entry.day < previousDay && previousDay - entry.day > 7) {
         currentMonth = (currentMonth + 1) % 12;
         if (currentMonth === 0) currentYear++;
       }
@@ -1050,7 +1054,9 @@ class ICSCalendarService {
 
     const hasDutyPatterns = Array.isArray(roster.dutyPatterns) && roster.dutyPatterns.length > 0;
 
-    // Pre-compute (year, month) for each entry
+    // Pre-compute (year, month) for each entry.
+    // Use the same >7 threshold as convertRosterToEvents to avoid false rollovers
+    // from repeated day numbers (e.g. simulator entries appearing twice).
     let currentMonth = period.startMonth;
     let currentYear = period.startYear;
     let previousDay = 0;
@@ -1059,7 +1065,7 @@ class ICSCalendarService {
     for (const entry of roster.entries) {
       if (!entry) continue;
 
-      if (entry.day < previousDay) {
+      if (entry.day < previousDay && previousDay - entry.day > 7) {
         currentMonth = (currentMonth + 1) % 12;
         if (currentMonth === 0) currentYear++;
       }

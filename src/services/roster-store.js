@@ -115,6 +115,67 @@ function flushPersistence() {
 // Initialize once on first import (safe: persistence disabled unless enabled via env)
 initPersistence(process.env);
 
+function compareEntryDate(a, b) {
+  if (a.year !== b.year) return a.year - b.year;
+  if (a.month !== b.month) return a.month - b.month;
+  return a.day - b.day;
+}
+
+function getMinEntryDate(roster) {
+  const entries = Array.isArray(roster && roster.entries) ? roster.entries : [];
+  let min = null;
+  for (const entry of entries) {
+    if (!entry || !Number.isFinite(entry.year) || !Number.isFinite(entry.month) || !Number.isFinite(entry.day)) continue;
+    if (!min || compareEntryDate(entry, min) < 0) {
+      min = { year: entry.year, month: entry.month, day: entry.day };
+    }
+  }
+  return min;
+}
+
+function getBidPeriodNum(roster) {
+  return parseInt((roster && roster.summary && roster.summary.bidPeriod) || '0', 10);
+}
+
+/**
+ * Remove entries/flights/dutyPatterns from older stored rosters that overlap with
+ * the new roster's date coverage. This prevents stale entries from previous bid
+ * periods appearing in the calendar alongside the new roster's data.
+ */
+function purgeOlderRosterOverlap(existingRosters, newRoster) {
+  const newBP = getBidPeriodNum(newRoster);
+  const newMinDate = getMinEntryDate(newRoster);
+  if (!newMinDate || newBP <= 0) return;
+
+  for (const r of existingRosters) {
+    const rBP = getBidPeriodNum(r);
+    if (rBP <= 0 || rBP >= newBP) continue;
+
+    if (Array.isArray(r.entries)) {
+      r.entries = r.entries.filter(entry => {
+        if (!entry || !Number.isFinite(entry.year) || !Number.isFinite(entry.month) || !Number.isFinite(entry.day)) return true;
+        return compareEntryDate(entry, newMinDate) < 0;
+      });
+    }
+
+    if (Array.isArray(r.flights)) {
+      r.flights = r.flights.filter(flight => {
+        if (!flight || !Number.isFinite(flight.year) || !Number.isFinite(flight.month) || !Number.isFinite(flight.day)) return true;
+        return compareEntryDate(flight, newMinDate) < 0;
+      });
+    }
+
+    if (Array.isArray(r.dutyPatterns)) {
+      r.dutyPatterns = r.dutyPatterns.filter(pattern => {
+        if (!pattern || !pattern.dated) return true;
+        const { year, month, day } = pattern.dated;
+        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return true;
+        return compareEntryDate(pattern.dated, newMinDate) < 0;
+      });
+    }
+  }
+}
+
 function getRosterId(roster) {
   if (roster && roster.employee && roster.employee.staffNo) {
     return String(roster.employee.staffNo).trim();
@@ -189,6 +250,10 @@ function ingestRosterText(rosterText) {
   }
 
   existing.employee = roster.employee || existing.employee;
+
+  // Purge entries from older-BP rosters whose dates overlap with the new roster's coverage.
+  // This prevents stale data from previous bid periods appearing alongside the new roster.
+  purgeOlderRosterOverlap(existing.rosters, roster);
 
   // If this roster matches an existing roster period for this employee, replace the stored roster.
   // This prevents old events lingering in the merged ICS output when the roster is revised.

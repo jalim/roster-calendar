@@ -101,12 +101,13 @@ class QantasRosterParser {
 
     // Parse header information
     this.parseHeader(lines, roster);
-    
+
+    // Parse summary / metadata first so periodStart is available for
+    // assignMonthYearToEntries when parseRosterEntries runs below.
+    this.parseSummary(lines, roster);
+
     // Parse roster entries
     this.parseRosterEntries(lines, roster);
-
-    // Parse summary / metadata that appears after the main table
-    this.parseSummary(lines, roster);
 
     // Parse Pattern Details section into individual flight legs
     this.parsePatternDetails(lines, roster);

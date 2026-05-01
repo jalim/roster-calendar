@@ -146,7 +146,7 @@ describe('QantasRosterParser', () => {
     // Second should be Mar 23 (month 2) with flight
     const mar23 = day23Entries.find(e => e.month === 2);
     expect(mar23).toBeDefined();
-    expect(mar23.dutyCode).toBe('8252');
+    expect(mar23.dutyCode).toBe('8252A1');
     expect(mar23.year).toBe(2026);
   });
 
