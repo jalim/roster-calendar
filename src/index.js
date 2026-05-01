@@ -29,6 +29,13 @@ const authService = require('./services/auth-service');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust the upstream reverse proxy so X-Forwarded-For and X-Forwarded-Proto
+// are used for real client IPs, HTTPS detection, and rate limiting.
+// Set TRUSTED_PROXY to the VPS IP (or CIDR) in production.
+if (process.env.TRUSTED_PROXY) {
+  app.set('trust proxy', process.env.TRUSTED_PROXY);
+}
+
 const logger = createLogger({ component: 'roster-calendar' });
 
 // View engine setup
@@ -42,9 +49,9 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://static.cloudflareinsights.com"],
+      connectSrc: ["'self'", "https://cdn.jsdelivr.net"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://static.cloudflareinsights.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
     },
